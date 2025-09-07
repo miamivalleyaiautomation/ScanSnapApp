@@ -11,14 +11,14 @@
       <button class="theme-toggle" @click="toggleTheme">{{ isDark ? 'Light' : 'Dark' }}</button>
     </div>
 
-    <!-- FULL-WIDTH TABS -->
+    <!-- Tabs -->
     <div class="tabs">
       <button class="tab" :class="{active:tab==='scan'}" @click="tab='scan'">SCAN</button>
       <button class="tab" :class="{active:tab==='catalog'}" @click="tab='catalog'">CATALOG</button>
       <button class="tab" :class="{active:tab==='setup'}" @click="tab='setup'">SETUP</button>
     </div>
 
-    <!-- SCAN TAB -->
+    <!-- SCAN -->
     <div v-if="tab==='scan'" class="panel">
       <div class="row" style="margin-bottom:8px">
         <button class="btn ghost" @click="requestPermission">Camera Permission</button>
@@ -111,7 +111,7 @@
       <div v-if="mode==='builder'">
         <table class="table">
           <thead><tr><th>Item</th><th style="width:200px">QTY</th><th style="width:64px"></th></tr></thead>
-          <tbody>
+        <tbody>
             <tr v-for="row in builderRows" :key="row.code">
               <td>
                 <div style="font-weight:700">{{ row.code }}</div>
@@ -135,7 +135,7 @@
       </div>
     </div>
 
-    <!-- CATALOG TAB -->
+    <!-- CATALOG -->
     <div v-else-if="tab==='catalog'" class="panel">
       <h3 style="margin-top:2px">Import Catalog</h3>
       <div class="row">
@@ -158,7 +158,6 @@
         </select>
       </div>
 
-      <!-- Import stats -->
       <div class="mini" v-if="importStats.total">
         <span class="kbd">Rows: {{ importStats.total }}</span>
         <span class="kbd">Inserted: {{ importStats.inserted }}</span>
@@ -166,17 +165,28 @@
         <span class="kbd">Duplicates collapsed: {{ importStats.duplicates }}</span>
       </div>
 
-      <table class="table">
-        <thead><tr><th>Barcode</th><th>Description</th></tr></thead>
+      <!-- Responsive catalog table: Description wraps first, then Barcode on small screens -->
+      <table class="table catalog">
+        <colgroup>
+          <col style="width: 42%">
+          <col style="width: 58%">
+        </colgroup>
+        <thead>
+          <tr>
+            <th class="barcode">Barcode</th>
+            <th class="desc">Description</th>
+          </tr>
+        </thead>
         <tbody>
           <tr v-for="row in filteredCatalog" :key="row.barcode">
-            <td>{{ row.barcode }}</td><td>{{ row.description }}</td>
+            <td class="barcode"><div class="cell">{{ row.barcode }}</div></td>
+            <td class="desc"><div class="cell">{{ row.description }}</div></td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <!-- SETUP TAB -->
+    <!-- SETUP -->
     <div v-else class="panel">
       <h3>Checks & Trims</h3>
       <div class="row" style="margin-bottom:10px">
@@ -186,12 +196,10 @@
       </div>
 
       <h3>Scanner Formats</h3>
-      <!-- Row 1: Enable/Disable -->
       <div class="row nowrap" style="margin-bottom:6px">
         <button class="btn ghost" @click="enableAll">Enable all</button>
         <button class="btn ghost" @click="disableAll">Disable all</button>
       </div>
-      <!-- Row 2: Linear/Matrix -->
       <div class="row nowrap" style="margin-bottom:8px">
         <label class="kbd no-wrap"><input type="checkbox" :checked="linearOn" @change="toggleLinear($event)"> linear_codes</label>
         <label class="kbd no-wrap"><input type="checkbox" :checked="matrixOn" @change="toggleMatrix($event)"> matrix_codes</label>
@@ -281,7 +289,7 @@ watch(stripCD, v => localStorage.setItem('stripCD', v?'1':'0'))
 watch(validateCD, v => localStorage.setItem('validateCD', v?'1':'0'))
 watch(beep, v => localStorage.setItem('beep', v?'1':'0'))
 
-/* QrcodeStream formats: never empty */
+/* Formats for QrcodeStream */
 const activeFormats = computed(() => {
   const list = formatList.filter(f => enabled[f])
   return list.length ? list : ['qr_code']
@@ -301,20 +309,18 @@ function toggleMatrix(e: Event){
 function enableAll(){ formatList.forEach(f => enabled[f] = true) }
 function disableAll(){ formatList.forEach(f => enabled[f] = false) }
 
-/* ---------- Catalog data ---------- */
-const rawRows = ref<Record<string, unknown>[]>([])  // keep full source rows
+/* Catalog */
+const rawRows = ref<Record<string, unknown>[]>([])
 const catalog = reactive(new Map<string,string>())
-const search = ref('')           // general search
-const searchBarcode = ref('')    // barcode-only search
+const search = ref('')
+const searchBarcode = ref('')
 const columns = ref<string[]>([])
 const barcodeCol = ref<string>('')
 const descCol = ref<string>('')
 
 const importStats = reactive({ total: 0, inserted: 0, blank: 0, duplicates: 0 })
-
 function normalize(s: string){ return s.toLowerCase().replace(/[\s_\-]+/g,'').trim() }
 
-/* Prefer true barcode columns over SKU/Code */
 function guessCols(headers: string[]){
   const H = headers.slice()
   const pri = [
@@ -352,7 +358,6 @@ function rebuildCatalogFromSelections(){
 }
 watch([barcodeCol, descCol], rebuildCatalogFromSelections)
 
-/* File input: CSV/XLS/XLSX */
 async function onFile(e: Event){
   const file = (e.target as HTMLInputElement).files?.[0]; if(!file) return
   const ext = file.name.split('.').pop()?.toLowerCase()
@@ -386,7 +391,7 @@ async function onFile(e: Event){
   rebuildCatalogFromSelections()
 }
 
-/* Filtering */
+/* Catalog filtering */
 const filteredCatalog = computed(() => {
   const qCode = searchBarcode.value.trim()
   const qAny = search.value.trim().toLowerCase()
@@ -418,7 +423,7 @@ function clearCatalog(){
   importStats.duplicates = 0
 }
 
-/* ---- Mode state ---- */
+/* Scan flow */
 const quickList = reactive(new Map<string, number>())
 const verifyRows = reactive<{code:string, ok:boolean}[]>([])
 const builder = reactive(new Map<string, {qty:number, desc?:string}>())
@@ -427,7 +432,6 @@ const unknownCount = computed(() => verifyRows.filter(r=>!r.ok).length)
 const builderRows = computed(() => [...builder.entries()].map(([code, v]) => ({ code, qty:v.qty, desc:v.desc || catalog.get(code) || '' })))
 const last = reactive<{code:string|null, qty:number}>({ code:null, qty:0 })
 
-/* ---- Scanning ---- */
 let lastAt = 0
 function throttle(): boolean { const now = Date.now(); if(now - lastAt < 300) return true; lastAt = now; return false }
 function onDetect(payload: any){
@@ -488,7 +492,7 @@ function removeItem(which:'quick'|'builder', code:string){ if(which==='quick') q
 function removeVerify(code:string){ const i = verifyRows.findIndex(r=>r.code===code); if(i>=0) verifyRows.splice(i,1) }
 function clearMode(which:'quick'|'verify'|'builder'){ if(which==='quick') quickList.clear(); if(which==='verify') verifyRows.splice(0); if(which==='builder') builder.clear() }
 
-/* Exports */
+/* Exporters */
 function exportQuick(type:'csv'|'xlsx'|'pdf'){
   const rows = [...quickList.entries()].map(([code,qty]) => [code, qty])
   if(type==='csv') exportCSV('quick-list.csv', rows, ['Barcode','QTY'])
