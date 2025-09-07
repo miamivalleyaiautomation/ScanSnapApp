@@ -112,8 +112,8 @@
       <!-- VERIFY -->
       <div v-if="mode==='verify'">
         <div class="verify-summary top">
-          <span class="count">✔ {{ knownCount }}</span>
-          <span class="count">✖ {{ unknownCount }}</span>
+          <span class="count">✅ {{ knownCount }}</span>
+          <span class="count">❌ {{ unknownCount }}</span>
         </div>
 
         <table class="table">
@@ -127,8 +127,8 @@
             <tr v-for="r in verifyRows" :key="r.code">
               <td class="barcode-col"><div class="barcode-text">{{ r.code }}</div></td>
               <td class="center">
-                <span v-if="r.ok" class="status-icon ok-icon" aria-label="Known">✔</span>
-                <span v-else class="status-icon bad-icon" aria-label="Unknown">✖</span>
+                <span v-if="r.ok" class="status-emoji" aria-label="Known">✅</span>
+                <span v-else class="status-emoji" aria-label="Unknown">❌</span>
               </td>
               <td class="right"><button class="icon-btn" @click="removeVerify(r.code)" aria-label="Delete">✖</button></td>
             </tr>
@@ -246,7 +246,7 @@
         <label class="kbd no-wrap"><input type="checkbox" :checked="matrixOn" @change="toggleMatrix($event)" /> matrix_codes</label>
       </div>
 
-      <div class="row nowrap" style="margin-bottom:8px">
+      <div class="row nowrap" style="margin-bottom:8px)">
         <button class="btn warn" @click="clearAllTrims">Clear all trims</button>
       </div>
 
@@ -748,10 +748,6 @@ function playBeep(){
   --headerH: 71px;
   --logoH: 36px;
 
-  /* brand/status */
-  --ok: #2e7d32;
-  --bad: #c62828;
-
   /* column widths */
   --qtyCol: 260px;
   --statusCol: 96px;
@@ -827,10 +823,8 @@ function playBeep(){
 .right{ text-align:right; }
 .center{ text-align:center; }
 
-/* verify: colored icons in table; counts neutral */
-.status-icon { font-weight: 700; }
-.ok-icon { color: var(--ok); }
-.bad-icon { color: var(--bad); }
+/* VERIFY */
+.status-emoji{ font-size:1.1rem; }
 .verify-summary{ display:flex; gap:10px; margin:6px 0; }
 .verify-summary.top{ margin-top:8px; }
 .verify-summary .count { color: var(--fg); font-weight: 700; }
