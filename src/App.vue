@@ -1,6 +1,7 @@
-<!-- FILE: src/App.vue -->
+<!-- FILE: src/App.vue (full, updated Setup layout classes) -->
 <template>
   <div class="container">
+    <!-- Header -->
     <div class="header">
       <div class="logo">
         <img v-if="isDark" src="/favicon_1024_dark.png" alt="icon">
@@ -10,6 +11,7 @@
       <button class="theme-toggle" @click="toggleTheme">{{ isDark ? 'Light' : 'Dark' }}</button>
     </div>
 
+    <!-- FULL-WIDTH TABS -->
     <div class="tabs">
       <button class="tab" :class="{active:tab==='scan'}" @click="tab='scan'">SCAN</button>
       <button class="tab" :class="{active:tab==='catalog'}" @click="tab='catalog'">CATALOG</button>
@@ -172,21 +174,30 @@
       </div>
 
       <h3>Scanner Formats</h3>
-      <div class="row" style="margin-bottom:8px">
+      <!-- keep pills on one line -->
+      <div class="row nowrap" style="margin-bottom:8px">
         <button class="btn ghost" @click="enableAll">Enable all</button>
         <button class="btn ghost" @click="disableAll">Disable all</button>
-        <label class="kbd"><input type="checkbox" :checked="linearOn" @change="toggleLinear($event)"> linear_codes</label>
-        <label class="kbd"><input type="checkbox" :checked="matrixOn" @change="toggleMatrix($event)"> matrix_codes</label>
+        <label class="kbd no-wrap"><input type="checkbox" :checked="linearOn" @change="toggleLinear($event)"> linear_codes</label>
+        <label class="kbd no-wrap"><input type="checkbox" :checked="matrixOn" @change="toggleMatrix($event)"> matrix_codes</label>
       </div>
 
-      <table class="table">
-        <thead><tr><th style="width:220px">Format</th><th>Trim Prefix</th><th>Trim Suffix</th><th>Enabled</th></tr></thead>
+      <!-- compact table fits within width -->
+      <table class="table setup">
+        <thead>
+          <tr>
+            <th>Format</th>
+            <th>Trim Prefix</th>
+            <th>Trim Suffix</th>
+            <th class="center">Enabled</th>
+          </tr>
+        </thead>
         <tbody>
           <tr v-for="f in formatList" :key="f">
-            <td>{{ f }}</td>
-            <td><input class="input" style="width:90px" type="number" min="0" v-model.number="trims[f].prefix"></td>
-            <td><input class="input" style="width:90px" type="number" min="0" v-model.number="trims[f].suffix"></td>
-            <td><input type="checkbox" v-model="enabled[f]"></td>
+            <td class="ellipsis">{{ f }}</td>
+            <td><input class="input input-compact" type="number" min="0" v-model.number="trims[f].prefix"></td>
+            <td><input class="input input-compact" type="number" min="0" v-model.number="trims[f].suffix"></td>
+            <td class="center"><input type="checkbox" v-model="enabled[f]"></td>
           </tr>
         </tbody>
       </table>
@@ -373,7 +384,6 @@ function processScan(raw: string, fmt?: Format){
     setLast(code, entry.qty)
   }
 
-  // Reset internal cache so the same code can be detected again
   paused.value = true
   setTimeout(() => { paused.value = false }, 180)
 }
