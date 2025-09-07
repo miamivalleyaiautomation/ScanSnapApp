@@ -1,4 +1,4 @@
-// FILE: src/utils/barcode.ts  (extended set expected by your current App.vue)
+// FILE: src/utils/barcode.ts  (extended set — matches App.vue that imports ALL_FORMATS)
 export type Format =
   | 'aztec' | 'code_128' | 'code_39' | 'code_93' | 'codabar'
   | 'databar' | 'databar_limited' | 'databar_expanded'
