@@ -143,7 +143,7 @@
         </div>
       </div>
 
-      <!-- ORDER BUILDER -->
+      <!-- ORDER BUILDER (editable description under barcode, default "unknown") -->
       <div v-if="mode==='builder'">
         <table class="table">
           <colgroup>
@@ -157,9 +157,9 @@
                 <div class="barcode-text" style="font-weight:700">{{ row.code }}</div>
                 <input
                   class="input input-compact ellipsis"
-                  :value="row.desc || catalog.get(row.code) || ''"
+                  :value="row.desc"
                   @input="setBuilderDesc(row.code, ($event.target as HTMLInputElement).value)"
-                  placeholder="Enter description..."
+                  placeholder="unknown"
                   style="width:100%; margin-top:2px"
                 />
               </td>
@@ -246,7 +246,7 @@
         <label class="kbd no-wrap"><input type="checkbox" :checked="matrixOn" @change="toggleMatrix($event)" /> matrix_codes</label>
       </div>
 
-      <div class="row nowrap" style="margin-bottom:8px)">
+      <div class="row nowrap" style="margin-bottom:8px">
         <button class="btn warn" @click="clearAllTrims">Clear all trims</button>
       </div>
 
@@ -621,7 +621,11 @@ function paintTrack(codes: Detected[], ctx: CanvasRenderingContext2D) {
 const knownCount = computed(() => verifyRows.filter(r=>r.ok).length)
 const unknownCount = computed(() => verifyRows.filter(r=>!r.ok).length)
 const builderRows = computed(() =>
-  [...builder.entries()].map(([code, v]) => ({ code, qty:v.qty, desc:v.desc || '' }))
+  [...builder.entries()].map(([code, v]) => ({
+    code,
+    qty: v.qty,
+    desc: (v.desc && v.desc.trim() !== '') ? v.desc : 'unknown'
+  }))
 )
 const last = reactive<{code:string|null, qty:number}>({ code:null, qty:0 })
 
@@ -646,11 +650,16 @@ function commitCode(code:string){
     }
     setLast(code, 1)
   } else {
-    const entry = builder.get(code) || { qty:0, desc: '' }
-    if (!entry.desc && catalog.get(code)) entry.desc = catalog.get(code) as string
-    entry.qty += 1
-    builder.set(code, entry)
-    setLast(code, entry.qty)
+    const ex = builder.get(code)
+    if (ex){
+      ex.qty += 1
+      builder.set(code, ex)
+      setLast(code, ex.qty)
+    } else {
+      const initialDesc = catalog.get(code) || 'unknown'  // ← default
+      builder.set(code, { qty: 1, desc: initialDesc })
+      setLast(code, 1)
+    }
   }
 }
 function setBuilderDesc(code:string, desc:string){
@@ -710,7 +719,7 @@ function exportVerify(type:'csv'|'xlsx'|'pdf'){
   if(type==='pdf') exportPDF('catalog-verify.pdf', rows, ['Barcode','Status'])
 }
 function exportBuilder(type:'csv'|'xlsx'|'pdf'){
-  const rows = builderRows.value.map(r => [r.code, r.desc || catalog.get(r.code) || '', r.qty])
+  const rows = builderRows.value.map(r => [r.code, r.desc, r.qty])
   if(type==='csv') exportCSV('order-builder.csv', rows, ['Barcode','Description','QTY'])
   if(type==='xlsx') exportXLSX('order-builder.xlsx', rows, ['Barcode','Description','QTY'])
   if(type==='pdf') exportPDF('order-builder.pdf', rows, ['Barcode','Description','QTY'])
@@ -744,7 +753,7 @@ function playBeep(){
   --fg: #e8e8e8;
   --edge: rgba(255,255,255,.14);
 
-  /* Header height reduced by 25px (96 -> 71) */
+  /* Header */
   --headerH: 71px;
   --logoH: 36px;
 
