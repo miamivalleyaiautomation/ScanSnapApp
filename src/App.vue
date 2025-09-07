@@ -23,7 +23,6 @@
 
     <!-- SCAN -->
     <div v-if="tab==='scan'" class="panel">
-      <!-- Start/Stop | Permission -->
       <div class="row nowrap" style="margin-bottom:8px">
         <button class="btn" style="flex:1" @click="toggleCamera">
           {{ scanning ? 'Stop Camera' : 'Start Camera' }}
@@ -31,7 +30,6 @@
         <button class="btn ghost" style="flex:1" @click="requestPermission">Camera Permission</button>
       </div>
 
-      <!-- Device select -->
       <div class="row" style="margin-bottom:8px">
         <select class="input" v-model="selectedDeviceId" @change="onDeviceChange" style="flex:1">
           <option v-for="d in devices" :key="d.deviceId" :value="d.deviceId">{{ d.label || 'camera' }}</option>
@@ -40,18 +38,17 @@
 
       <!-- Camera -->
       <div class="video" ref="videoBox">
-        <!-- Torch -->
         <button
           v-if="scanning && torchSupported"
           class="icon-btn"
-          style="position:absolute;top:8px;left:8px;z-index:3"
+          style="position:absolute;top:8px;left:8px;z-index:4"
           :style="torchOn ? 'background:var(--brand);color:#fff;border-color:transparent' : ''"
           @click="toggleTorch"
           :title="torchOn ? 'Torch Off' : 'Torch On'"
           aria-label="Toggle torch"
         >🔦</button>
 
-        <!-- Bounding box overlay -->
+        <!-- Bounding box overlay (sits above video) -->
         <div v-if="live.box" class="bbox"
              :style="{left: live.box.left+'px', top: live.box.top+'px', width: live.box.width+'px', height: live.box.height+'px'}">
         </div>
@@ -62,11 +59,12 @@
           :formats="activeFormats"
           @camera-on="onCameraReady"
           @detect="onDetect"
+          @decode="onDecode"
           @error="onError"
         />
       </div>
 
-      <!-- Tap-to-add (enabled only when live box exists) -->
+      <!-- Tap-to-add: only when we have an active detection (box or recent decode) -->
       <div class="row" style="margin-top:8px">
         <button class="btn" style="flex:1" :disabled="!canTap" @click="tapToAdd">
           {{ tapLabel }}
@@ -318,7 +316,7 @@ function toggleCamera(){
     scanning.value=false
     if(videoTrack.value){ try{ (videoTrack.value as any).applyConstraints?.({ advanced:[{ torch:false }] }) }catch{} }
     torchOn.value=false
-    live.raw = null; live.fmt = undefined; live.box = null
+    live.raw = null; live.fmt = undefined; live.box = null; liveActive.value = false
   }else{
     scanning.value=true
   }
@@ -431,11 +429,14 @@ onMounted(() => {
   try{ const C = JSON.parse(localStorage.getItem(LS.catalog)||'[]') as [string,string][]; catalog.clear(); for(const [c,d] of C) catalog.set(c,d) }catch{}
 })
 
-/* Live detection + bounding box */
+/* Live detection + bbox + active window */
 const live = reactive<{ raw: string | null; fmt?: Format; box: null | {left:number; top:number; width:number; height:number} }>({
   raw: null, fmt: undefined, box: null
 })
+const liveActive = ref(false)
 let boxTimer: number | undefined
+let activeTimer: number | undefined
+
 const previewCode = computed<string>(() => {
   const raw = live.raw?.trim()
   if(!raw) return ''
@@ -448,15 +449,20 @@ const previewCode = computed<string>(() => {
   }
   return code
 })
-const canTap = computed(() => !!(live.box && previewCode.value))
+const canTap = computed(() => !!(previewCode.value && liveActive.value))
 const tapLabel = computed(() => previewCode.value ? `Tap to add ${previewCode.value}` : 'Tap to add')
+
+function markActive(ms = 600){
+  liveActive.value = true
+  if(activeTimer) clearTimeout(activeTimer as any)
+  activeTimer = setTimeout(() => { liveActive.value = false }, ms) as any
+}
 
 function placeBoxFromDetection(first:any){
   const el = videoBox.value as HTMLElement | null
   const vid = el?.querySelector('video') as HTMLVideoElement | null
   if(!el || !vid){ live.box = null; return }
 
-  // derive raw box (video coordinates)
   let x=0,y=0,w=0,h=0
   const bb = first?.boundingBox
   if(bb && typeof bb.x==='number'){
@@ -471,30 +477,34 @@ function placeBoxFromDetection(first:any){
     live.box = null; return
   }
 
-  // map to displayed video rect (object-fit: contain)
   const cw = el.clientWidth, ch = el.clientHeight
   const vw = vid.videoWidth || cw, vh = vid.videoHeight || ch
   const scale = Math.min(cw / vw, ch / vh)
   const dispW = vw * scale, dispH = vh * scale
   const offL = (cw - dispW) / 2, offT = (ch - dispH) / 2
 
-  live.box = {
-    left: offL + x * scale,
-    top:  offT + y * scale,
-    width:  w * scale,
-    height: h * scale
-  }
+  live.box = { left: offL + x * scale, top: offT + y * scale, width: w * scale, height: h * scale }
 
   if(boxTimer) clearTimeout(boxTimer as any)
-  boxTimer = setTimeout(() => { live.box = null }, 350) as any  // brief persistence
+  boxTimer = setTimeout(() => { live.box = null }, 350) as any
 }
+
 function onDetect(payload:any){
   const first = (payload as any[])[0]
   const text = String(first?.rawValue ?? '').trim()
   const fmt = String(first?.format ?? '').toLowerCase() as Format | undefined
   live.raw = text || null
   live.fmt = fmt
-  if (text) placeBoxFromDetection(first)
+  if (text) {
+    placeBoxFromDetection(first)
+    markActive()
+  }
+}
+function onDecode(text:string){
+  live.raw = String(text || '').trim() || null
+  live.fmt = undefined
+  live.box = null
+  if (live.raw) markActive()
 }
 function tapToAdd(){
   if(!canTap.value || !live.raw) return
@@ -555,7 +565,7 @@ function clearMode(which:'quick'|'verify'|'builder'){ if(which==='quick'){ quick
 /* Exports */
 function exportQuick(type:'csv'|'xlsx'|'pdf'){ const rows = [...quickList.entries()].map(([code,qty]) => [code, qty]); if(type==='csv'){ exportCSV('quick-list.csv', rows, ['Barcode','QTY']) } if(type==='xlsx'){ exportXLSX('quick-list.xlsx', rows, ['Barcode','QTY']) } if(type==='pdf'){ exportPDF('quick-list.pdf', rows, ['Barcode','QTY']) } }
 function exportVerify(type:'csv'|'xlsx'|'pdf'){ const rows = verifyRows.map(r => [r.code, r.ok ? 'KNOWN' : 'UNKNOWN']); if(type==='csv'){ exportCSV('catalog-verify.csv', rows, ['Barcode','Status']) } if(type==='xlsx'){ exportXLSX('catalog-verify.xlsx', rows, ['Barcode','Status']) } if(type==='pdf'){ exportPDF('catalog-verify.pdf', rows, ['Barcode','Status']) } }
-function exportBuilder(type:'csv'|'xlsx'|'pdf'){ const rows = builderRows.value.map(r => [r.code, r.desc || '', r.qty]); if(type==='csv'){ exportCSV('order-builder.csv', rows, ['Barcode','Description','QTY']) } if(type==='xlsx'){ exportXLSX('order-builder.xlsx', rows, ['Barcode','Description','QTY']) } if(type==='pdf'){ exportPDF('order-builder.pdf', rows, ['Barcode','Description','QTY']) } }
+function exportBuilder(type:'csv'|'xlsx'|'pdf'){ const rows = builderRows.value.map(r => [r.code, r.desc || '', r.qty]); if(type==='csv'){ exportCSV('order-builder.csv', rows, ['Barcode','Description','QTY']) } if(type==='xlsx'){ exportXLSX('order-builder.xlsx', rows, ['Barcode','Description','QTY']) } }
 
 /* Beep */
 function playBeep(){
@@ -567,12 +577,15 @@ function playBeep(){
 </script>
 
 <style scoped>
-/* minimal bbox styling; inherits theme colors */
+/* Keep overlay above the video */
+.video{ position: relative; }
+:deep(video){ position: relative; z-index: 1; }
 .bbox{
   position:absolute;
   border:2px solid var(--brand);
-  border-radius:4px;          /* why: soft edges improve visibility */
+  border-radius:4px;
   box-shadow:0 0 0 2px rgba(0,0,0,.12), 0 4px 10px rgba(0,0,0,.18);
   pointer-events:none;
+  z-index: 3;
 }
 </style>
