@@ -49,7 +49,6 @@
         <!-- Toast -->
         <div v-if="toast.show" class="toast" role="status" aria-live="polite">{{ toast.text }}</div>
 
-        <!-- Live bbox painter -->
         <QrcodeStream
           v-if="scanning"
           :constraints="cameraConstraints"
@@ -61,7 +60,7 @@
         />
       </div>
 
-      <!-- Tap-to-add: disabled when preview cleared (>1s no code or camera off) -->
+      <!-- Tap-to-add: only enabled when bbox is present AND a valid preview exists -->
       <div class="row" style="margin-top:8px">
         <button class="btn" style="flex:1" :disabled="!canTap" @click="tapToAdd">
           {{ tapLabel }}
@@ -88,14 +87,14 @@
       <div v-if="mode==='quick'">
         <table class="table">
           <colgroup>
-            <col />                             <!-- barcode flex -->
-            <col style="width:220px" />         <!-- QTY fixed -->
-            <col style="width:56px" />          <!-- delete -->
+            <col />                 <!-- barcode flex -->
+            <col style="width:220px" />
+            <col style="width:56px" />
           </colgroup>
           <thead><tr><th>Barcode</th><th class="right">QTY</th><th></th></tr></thead>
           <tbody>
             <tr v-for="([code, qty]) in quickEntries" :key="code">
-              <td class="ellipsis">{{ code }}</td>
+              <td class="barcode-col"><div class="barcode-text">{{ code }}</div></td>
               <td class="right">
                 <div style="display:inline-flex;gap:8px;align-items:center">
                   <button class="icon-btn" @click="changeQty('quick', code, -1)">−</button>
@@ -119,14 +118,14 @@
       <div v-if="mode==='verify'">
         <table class="table">
           <colgroup>
-            <col />                             <!-- barcode flex -->
-            <col style="width:120px" />         <!-- status fixed -->
-            <col style="width:56px" />          <!-- delete -->
+            <col />                 <!-- barcode flex -->
+            <col style="width:120px" />
+            <col style="width:56px" />
           </colgroup>
           <thead><tr><th>Barcode</th><th class="center">Status</th><th></th></tr></thead>
           <tbody>
             <tr v-for="r in verifyRows" :key="r.code">
-              <td class="ellipsis">{{ r.code }}</td>
+              <td class="barcode-col"><div class="barcode-text">{{ r.code }}</div></td>
               <td class="center">
                 <span v-if="r.ok" class="ok" aria-label="Known">✔</span>
                 <span v-else class="bad" aria-label="Unknown">✖</span>
@@ -151,16 +150,15 @@
       <div v-if="mode==='builder'">
         <table class="table">
           <colgroup>
-            <col />                             <!-- barcode/desc flex -->
-            <col style="width:220px" />         <!-- QTY fixed -->
-            <col style="width:56px" />          <!-- delete -->
+            <col />                 <!-- barcode/desc flex -->
+            <col style="width:220px" />
+            <col style="width:56px" />
           </colgroup>
           <thead><tr><th>Barcode / Description</th><th class="right">QTY</th><th></th></tr></thead>
           <tbody>
             <tr v-for="row in builderRows" :key="row.code">
               <td>
-                <div style="font-weight:700" class="ellipsis">{{ row.code }}</div>
-                <!-- Show catalog description if exists; otherwise allow manual entry -->
+                <div class="barcode-text" style="font-weight:700">{{ row.code }}</div>
                 <template v-if="catalog.get(row.code)">
                   <div style="opacity:.85;font-size:.92em" class="ellipsis">{{ catalog.get(row.code) }}</div>
                 </template>
@@ -229,7 +227,7 @@
         <thead><tr><th class="barcode">Barcode</th><th class="desc">Description</th></tr></thead>
         <tbody>
           <tr v-for="row in filteredCatalog" :key="row.barcode">
-            <td class="barcode"><div class="cell">{{ row.barcode }}</div></td>
+            <td class="barcode"><div class="barcode-text">{{ row.barcode }}</div></td>
             <td class="desc"><div class="cell">{{ row.description }}</div></td>
           </tr>
         </tbody>
@@ -325,7 +323,7 @@ async function onCameraReady(){
     const vid = videoBox.value?.querySelector('video') as HTMLVideoElement | null
     const track = (vid?.srcObject as MediaStream | undefined)?.getVideoTracks?.()[0] || null
     videoTrack.value = track || null
-    torchSupported.value = !!(track && typeof track.getCapabilities === 'function' && (track.getCapabilities)().torch !== undefined)
+    torchSupported.value = !!(track && typeof track.getCapabilities === 'function' && (track.getCapabilities as any)().torch !== undefined)
   }catch{ torchSupported.value = false }
 }
 function onDeviceChange(){ if(scanning.value){ scanning.value=false; setTimeout(()=>{ scanning.value=true; torchOn.value=false }, 0) } }
@@ -334,7 +332,7 @@ function toggleCamera(){
     scanning.value=false
     if(videoTrack.value){ try{ (videoTrack.value as any).applyConstraints?.({ advanced:[{ torch:false }] }) }catch{} }
     torchOn.value=false
-    clearPreview()                                  /* clear when camera stops */
+    clearPreview()                                /* clear when camera stops */
   }else{
     scanning.value=true
   }
@@ -447,15 +445,11 @@ onMounted(() => {
   try{ const C = JSON.parse(localStorage.getItem(LS.catalog)||'[]') as [string,string][]; catalog.clear(); for(const [c,d] of C) catalog.set(c,d) }catch{}
 })
 
-/* Live detection + preview clearing */
+/* Live detection gated by BBOX presence */
 type DetectedEvt = { rawValue?: string; format?: string }
 const live = reactive<{ raw: string | null; fmt?: Format }>({ raw: null, fmt: undefined })
-let clearTimer: number | undefined
+const boxesActive = ref(false)
 
-function scheduleClear(ms=1000){
-  if(clearTimer) clearTimeout(clearTimer as any)
-  clearTimer = setTimeout(() => { clearPreview() }, ms) as any
-}
 function clearPreview(){
   live.raw = null
   live.fmt = undefined
@@ -472,23 +466,59 @@ const previewCode = computed<string>(() => {
   }
   return code
 })
-const canTap = computed(() => !!previewCode.value)
+/* enable Tap only with scanning + bbox + valid preview */
+const canTap = computed(() => scanning.value && boxesActive.value && !!previewCode.value)
 const tapLabel = computed(() => previewCode.value ? `Tap to add ${previewCode.value}` : 'Tap to add')
 
 function onDetect(payload:any){
   const first = (payload as DetectedEvt[])[0]
   const text = String(first?.rawValue ?? '').trim()
   const fmt  = String(first?.format ?? '').toLowerCase() as Format | undefined
-  live.raw = text || null
-  live.fmt = fmt
-  scheduleClear(1000)                              /* clear if no new detection in 1s */
+  if(text){ live.raw = text; live.fmt = fmt }
+}
+/* Painter drives bbox state; clears immediately when no boxes */
+type Detected = { boundingBox?: {x:number;y:number;width:number;height:number}; rawValue?: string }
+function paintTrack(codes: Detected[], ctx: CanvasRenderingContext2D) {
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
+
+  if (!codes?.length) {
+    boxesActive.value = false
+    clearPreview()
+    return
+  }
+  boxesActive.value = true
+
+  const root = getComputedStyle(document.documentElement)
+  const brand = (root.getPropertyValue('--brand') || '#2e7d32').trim()
+  const bg = (root.getPropertyValue('--overlayBg') || 'rgba(0,0,0,.65)').trim()
+  const fg = (root.getPropertyValue('--overlayFg') || '#fff').trim()
+
+  ctx.save()
+  ctx.lineWidth = 3
+  ctx.strokeStyle = brand
+  ctx.fillStyle = bg
+  ctx.font = '600 14px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+  for (const c of codes) {
+    const bb = c?.boundingBox; if (!bb) continue
+    ctx.strokeRect(bb.x, bb.y, bb.width, bb.height)
+    if (c?.rawValue) {
+      const text = String(c.rawValue), pad = 4
+      const m = ctx.measureText(text)
+      const tw = m.width + pad * 2, th = 18 + pad * 2
+      const tx = Math.max(2, bb.x), ty = Math.max(th + 2, bb.y)
+      ctx.fillRect(tx, ty - th, tw, th)
+      ctx.fillStyle = fg
+      ctx.fillText(text, tx + pad, ty - 6)
+      ctx.fillStyle = bg
+    }
+  }
+  ctx.restore()
 }
 function tapToAdd(){
   const code = previewCode.value
   if(!code) return
   commitCode(code)
   showToast(`✔ Added ${code}`)
-  scheduleClear(800)                                /* clear quickly after manual add */
 }
 
 /* Commit logic */
@@ -507,7 +537,7 @@ function commitCode(code:string){
     quickList.set(code, (quickList.get(code) || 0) + 1)
     setLast(code, quickList.get(code)!)
   } else if(mode.value==='verify'){
-    const ok = catalog.has(code)                     /* unknown if catalog empty */
+    const ok = catalog.has(code)             /* with empty catalog -> all unknown */
     const i = verifyRows.findIndex(r => r.code === code)
     if (i >= 0) { verifyRows[i] = { code, ok } } else { verifyRows.push({ code, ok }) }
     setLast(code, 1)
@@ -543,38 +573,6 @@ function removeItem(which:'quick'|'builder', code:string){ if(which==='quick') q
 function removeVerify(code:string){ const i = verifyRows.findIndex(r=>r.code===code); if(i>=0) verifyRows.splice(i,1) }
 function clearMode(which:'quick'|'verify'|'builder'){ if(which==='quick') quickList.clear(); if(which==='verify') verifyRows.splice(0); if(which==='builder') builder.clear() }
 
-/* Painter: bbox + text each frame */
-type Detected = { boundingBox?: {x:number;y:number;width:number;height:number}; rawValue?: string }
-function paintTrack(codes: Detected[], ctx: CanvasRenderingContext2D) {
-  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
-  if (!codes?.length) return
-  const root = getComputedStyle(document.documentElement)
-  const brand = (root.getPropertyValue('--brand') || '#2e7d32').trim()
-  const bg = (root.getPropertyValue('--overlayBg') || 'rgba(0,0,0,.65)').trim()
-  const fg = (root.getPropertyValue('--overlayFg') || '#fff').trim()
-
-  ctx.save()
-  ctx.lineWidth = 3
-  ctx.strokeStyle = brand
-  ctx.fillStyle = bg
-  ctx.font = '600 14px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
-  for (const c of codes) {
-    const bb = c?.boundingBox; if (!bb) continue
-    ctx.strokeRect(bb.x, bb.y, bb.width, bb.height)
-    if (c?.rawValue) {
-      const text = String(c.rawValue), pad = 4
-      const m = ctx.measureText(text)
-      const tw = m.width + pad * 2, th = 18 + pad * 2
-      const tx = Math.max(2, bb.x), ty = Math.max(th + 2, bb.y)
-      ctx.fillRect(tx, ty - th, tw, th)
-      ctx.fillStyle = fg
-      ctx.fillText(text, tx + pad, ty - 6)
-      ctx.fillStyle = bg
-    }
-  }
-  ctx.restore()
-}
-
 /* Toast */
 const toast = reactive({ show:false, text:'' })
 let toastTimer: number | undefined
@@ -602,6 +600,27 @@ function playBeep(){
 :deep(canvas){ position:absolute; inset:0; z-index:3; }
 :deep(video){ position:relative; z-index:1; }
 
+/* Tables */
+.table{ width:100%; border-collapse:collapse; table-layout:fixed; } /* fixed to prevent horizontal scroll */
+.table th,.table td{ padding:8px 10px; vertical-align:middle; }
+.barcode-col{ width:auto; }
+.barcode-text{
+  display:inline-block;
+  min-width:20ch;            /* show ~20 chars when space allows */
+  max-width:100%;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width:420px){
+  .barcode-text{ font-size:12px; } /* help fit 20ch on small screens */
+}
+
+.ellipsis{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.center{ text-align:center; }
+.right{ text-align:right; }
+
 /* Toast above video */
 .toast{
   position:absolute;
@@ -614,8 +633,4 @@ function playBeep(){
   box-shadow:0 4px 12px rgba(0,0,0,.25);
   z-index:5;
 }
-
-.ellipsis{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.center{ text-align:center; }
-.right{ text-align:right; }
 </style>
