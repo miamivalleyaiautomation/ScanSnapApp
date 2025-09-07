@@ -1,5 +1,4 @@
-// FILE: src/utils/barcode.ts
-
+// FILE: src/utils/barcode.ts  (extended set expected by your current App.vue)
 export type Format =
   | 'aztec' | 'code_128' | 'code_39' | 'code_93' | 'codabar'
   | 'databar' | 'databar_limited' | 'databar_expanded'
@@ -20,14 +19,12 @@ export const LINEAR_GROUP: Format[] = [
   'databar','databar_limited','databar_expanded',
   'ean_13','ean_8','itf','upc_a','upc_e','dx_film_edge'
 ]
-
 export const MATRIX_GROUP: Format[] = [
   'qr_code','micro_qr_code','rm_qr_code',
   'data_matrix','pdf417','aztec','maxi_code'
 ]
 
 export type TrimRules = Record<Format, { prefix: number; suffix: number }>
-
 export const DEFAULT_TRIMS: TrimRules = ALL_FORMATS
   .reduce((acc, f) => { acc[f] = { prefix: 0, suffix: 0 }; return acc }, {} as TrimRules)
 DEFAULT_TRIMS.ean_13 = { prefix: 1, suffix: 1 }
@@ -35,7 +32,6 @@ DEFAULT_TRIMS.upc_a  = { prefix: 1, suffix: 1 }
 DEFAULT_TRIMS.upc_e  = { prefix: 1, suffix: 1 }
 DEFAULT_TRIMS.ean_8  = { prefix: 0, suffix: 0 }
 
-/* ---------- EAN/UPC helpers ---------- */
 export function computeEAN13CheckDigit(code12: string): number {
   const a = code12.padStart(12, '0').split('').map(Number)
   const sum = a.reduce((acc, d, i) => acc + d * (i % 2 === 0 ? 1 : 3), 0)
@@ -49,14 +45,12 @@ export function computeEAN8CheckDigit(code7: string): number {
   return mod === 0 ? 0 : 10 - mod
 }
 
-/* Validation: only strict for EAN/UPC; others pass-through */
 export function validateCheckDigit(code: string, fmt: Format): boolean {
   if (!/^\d+$/.test(code)) return true
   if (fmt === 'ean_13' || fmt === 'upc_a') {
     if (code.length < 12) return true
-    const body = code.slice(0, -1)
     const cd = Number(code.at(-1))
-    return cd === computeEAN13CheckDigit(body)
+    return cd === computeEAN13CheckDigit(code.slice(0, -1))
   }
   if (fmt === 'ean_8') {
     if (code.length !== 8) return true
@@ -65,8 +59,6 @@ export function validateCheckDigit(code: string, fmt: Format): boolean {
   }
   return true
 }
-
-/* Optional check-digit stripping */
 export function stripCheckDigit(code: string, fmt: Format, doStrip: boolean): string {
   if (!doStrip) return code
   if (fmt === 'ean_13' || fmt === 'upc_a' || fmt === 'ean_8' || fmt === 'upc_e') {
@@ -74,8 +66,6 @@ export function stripCheckDigit(code: string, fmt: Format, doStrip: boolean): st
   }
   return code
 }
-
-/* Apply per-format trims */
 export function applyTrims(raw: string, fmt: Format, trims: TrimRules): string {
   const t = trims[fmt]
   const left = Math.max(0, Math.min(raw.length, t.prefix))
