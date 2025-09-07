@@ -26,9 +26,10 @@ export function exportXLSX(filename: string, rows: (string | number)[][], header
 
 /**
  * PDF export (A4 portrait, always light theme)
- * - Header (every page): favicon left + wordmark centered, both keep aspect ratio; divider line under header.
- * - Footer (every page): timestamp (left) + page/total (right).
- * - Table header: white bg, bold black text (no solid black fill).
+ * - Header (every page): favicon left + wordmark centered (aspect-true), divider below.
+ * - Footer (every page): divider line, timestamp (left) + page/total (right).
+ * - Table header: white bg, bold black text.
+ * - QTY column: right-aligned and width estimated from content (not too wide).
  */
 export async function exportPDF(
   filename: string,
@@ -38,7 +39,7 @@ export async function exportPDF(
   const iconUrl = '/favicon_1024_light.png'
   const textUrl = '/text_1024_light.png'
 
-  // Load images as data URLs with natural sizes for aspect-true scaling
+  // Load images (keep aspect ratio)
   const [iconImg, textImg] = await Promise.all([loadImageInfo(iconUrl), loadImageInfo(textUrl)])
 
   const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4', compress: true })
@@ -51,11 +52,12 @@ export async function exportPDF(
   const headerTop = 10
   const iconH = 10
   const textH = 13
-  const iconW = scaleWidth(iconImg, iconH)
-  const textW = scaleWidth(textImg, textH)
+  const iconW = scaleWidth(iconImg, iconH)     // keep aspect
+  const textW = scaleWidth(textImg, textH)     // keep aspect
   const headerBottomY = Math.max(headerTop + textH, headerTop + iconH) + 3
   const footerBottomPad = 8
   const footerY = pageH - footerBottomPad
+  const footerLineY = footerY - 4              // divider sits just above footer text
   const tableTop = headerBottomY + 4
   const tableBottom = 12
 
@@ -63,10 +65,13 @@ export async function exportPDF(
   const dividerGray = 180
   const textGray = 30
 
-  // Column alignments (right-align QTY)
+  // Column styles: detect QTY and right-align + auto width
   const colStyles: Record<number, any> = {}
   const qtyIdx = headers ? headers.findIndex(h => h.trim().toLowerCase() === 'qty') : -1
-  if (qtyIdx >= 0) colStyles[qtyIdx] = { halign: 'right' }
+  if (qtyIdx >= 0) {
+    const est = estimateQtyWidth(rows, qtyIdx) // mm
+    colStyles[qtyIdx] = { halign: 'right', cellWidth: est }
+  }
 
   autoTable(doc, {
     theme: 'grid',
@@ -89,25 +94,30 @@ export async function exportPDF(
       lineColor: 180,
       lineWidth: 0.2
     },
-    bodyStyles: {},
     columnStyles: colStyles,
+    didParseCell: (data: any) => {
+      // Right-align the QTY header text too (visual consistency)
+      if (data.section === 'head' && qtyIdx >= 0 && data.column.index === qtyIdx) {
+        data.cell.styles.halign = 'right'
+      }
+    },
     didDrawPage: (data: any) => {
       // ----- Header -----
       try {
-        // favicon (left), aspect-true
-        doc.addImage(iconImg.dataURL, 'PNG', marginL, headerTop, iconW, iconH)
-
-        // wordmark (center), aspect-true
+        doc.addImage(iconImg.dataURL, 'PNG', marginL, headerTop, iconW, iconH) // favicon
         const tx = (pageW - textW) / 2
-        doc.addImage(textImg.dataURL, 'PNG', tx, headerTop, textW, textH)
+        doc.addImage(textImg.dataURL, 'PNG', tx, headerTop, textW, textH)      // wordmark
       } catch {}
-
-      // divider
+      // Header divider
       doc.setDrawColor(dividerGray)
       doc.setLineWidth(0.3)
       doc.line(marginL, headerBottomY, pageW - marginR, headerBottomY)
 
       // ----- Footer -----
+      // Footer divider
+      doc.line(marginL, footerLineY, pageW - marginR, footerLineY)
+
+      // Footer text
       doc.setTextColor(textGray)
       doc.setFontSize(8)
       const ts = formatStamp(new Date())
@@ -134,7 +144,7 @@ function triggerDownload(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
-/** Load an image, return dataURL and natural size. Keeps aspect when drawing. */
+/** Load an image and return dataURL + natural size (keeps aspect ratio when drawing). */
 async function loadImageInfo(url: string): Promise<{ dataURL: string; width: number; height: number }> {
   const res = await fetch(url)
   const blob = await res.blob()
@@ -147,7 +157,6 @@ async function loadImageInfo(url: string): Promise<{ dataURL: string; width: num
     URL.revokeObjectURL(objUrl)
   }
 }
-
 function loadHTMLImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image()
@@ -156,7 +165,6 @@ function loadHTMLImage(url: string): Promise<HTMLImageElement> {
     img.src = url
   })
 }
-
 function blobToDataURL(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -165,14 +173,25 @@ function blobToDataURL(blob: Blob): Promise<string> {
     reader.readAsDataURL(blob)
   })
 }
-
 /** Given desired height, compute width preserving aspect ratio. */
 function scaleWidth(meta: { width: number; height: number }, targetH: number): number {
   if (!meta.height || !meta.width) return targetH
   const ratio = meta.width / meta.height
   return targetH * ratio
 }
-
+/** Estimate a tight QTY column width from data (in mm), clamped to sane bounds. */
+function estimateQtyWidth(rows: (string|number)[][], idx: number): number {
+  // Why: keep QTY as narrow as needed while leaving room for big barcodes.
+  let maxChars = 1
+  for (const r of rows) {
+    const v = r?.[idx]
+    const s = String(v ?? '').trim()
+    if (s.length > maxChars) maxChars = s.length
+  }
+  // approx char width at 9pt + padding; clamp between 14mm and 30mm
+  const mm = Math.min(30, Math.max(14, maxChars * 2.2 + 8))
+  return mm
+}
 function pad(n: number): string { return n < 10 ? `0${n}` : String(n) }
 function formatStamp(d: Date): string {
   const yyyy = d.getFullYear()
