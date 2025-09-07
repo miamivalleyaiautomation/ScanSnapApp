@@ -23,6 +23,7 @@
 
     <!-- SCAN -->
     <div v-if="tab==='scan'" class="panel">
+      <!-- Start/Stop | Permission -->
       <div class="row nowrap" style="margin-bottom:8px">
         <button class="btn" style="flex:1" @click="toggleCamera">
           {{ scanning ? 'Stop Camera' : 'Start Camera' }}
@@ -30,18 +31,30 @@
         <button class="btn ghost" style="flex:1" @click="requestPermission">Camera Permission</button>
       </div>
 
+      <!-- Device select -->
       <div class="row" style="margin-bottom:8px">
         <select class="input" v-model="selectedDeviceId" @change="onDeviceChange" style="flex:1">
           <option v-for="d in devices" :key="d.deviceId" :value="d.deviceId">{{ d.label || 'camera' }}</option>
         </select>
       </div>
 
-      <!-- Camera + torch -->
+      <!-- Camera -->
       <div class="video" ref="videoBox">
-        <button v-if="scanning && torchSupported" class="icon-btn"
-                style="position:absolute;top:8px;left:8px;z-index:3"
-                :style="torchOn ? 'background:var(--brand);color:#fff;border-color:transparent' : ''"
-                @click="toggleTorch" :title="torchOn ? 'Torch Off' : 'Torch On'" aria-label="Toggle torch">🔦</button>
+        <!-- Torch -->
+        <button
+          v-if="scanning && torchSupported"
+          class="icon-btn"
+          style="position:absolute;top:8px;left:8px;z-index:3"
+          :style="torchOn ? 'background:var(--brand);color:#fff;border-color:transparent' : ''"
+          @click="toggleTorch"
+          :title="torchOn ? 'Torch Off' : 'Torch On'"
+          aria-label="Toggle torch"
+        >🔦</button>
+
+        <!-- Bounding box overlay -->
+        <div v-if="live.box" class="bbox"
+             :style="{left: live.box.left+'px', top: live.box.top+'px', width: live.box.width+'px', height: live.box.height+'px'}">
+        </div>
 
         <QrcodeStream
           v-if="scanning"
@@ -53,10 +66,10 @@
         />
       </div>
 
-      <!-- Tap-to-add fixed under camera -->
+      <!-- Tap-to-add (enabled only when live box exists) -->
       <div class="row" style="margin-top:8px">
-        <button class="btn" style="flex:1" :disabled="!previewCode" @click="tapToAdd">
-          Tap to add
+        <button class="btn" style="flex:1" :disabled="!canTap" @click="tapToAdd">
+          {{ tapLabel }}
         </button>
       </div>
 
@@ -299,18 +312,13 @@ async function onCameraReady(){
     torchSupported.value = !!(track && typeof track.getCapabilities === 'function' && (track.getCapabilities() as any).torch !== undefined)
   }catch{ torchSupported.value = false }
 }
-function onDeviceChange(){
-  if(scanning.value){
-    scanning.value=false
-    setTimeout(()=>{ scanning.value=true; torchOn.value=false }, 0)
-  }
-}
+function onDeviceChange(){ if(scanning.value){ scanning.value=false; setTimeout(()=>{ scanning.value=true; torchOn.value=false }, 0) } }
 function toggleCamera(){
   if(scanning.value){
     scanning.value=false
     if(videoTrack.value){ try{ (videoTrack.value as any).applyConstraints?.({ advanced:[{ torch:false }] }) }catch{} }
     torchOn.value=false
-    live.raw = null; live.fmt = undefined
+    live.raw = null; live.fmt = undefined; live.box = null
   }else{
     scanning.value=true
   }
@@ -423,8 +431,11 @@ onMounted(() => {
   try{ const C = JSON.parse(localStorage.getItem(LS.catalog)||'[]') as [string,string][]; catalog.clear(); for(const [c,d] of C) catalog.set(c,d) }catch{}
 })
 
-/* Live detection (always streaming) */
-const live = reactive<{ raw: string | null; fmt?: Format }>({ raw: null, fmt: undefined })
+/* Live detection + bounding box */
+const live = reactive<{ raw: string | null; fmt?: Format; box: null | {left:number; top:number; width:number; height:number} }>({
+  raw: null, fmt: undefined, box: null
+})
+let boxTimer: number | undefined
 const previewCode = computed<string>(() => {
   const raw = live.raw?.trim()
   if(!raw) return ''
@@ -437,19 +448,60 @@ const previewCode = computed<string>(() => {
   }
   return code
 })
+const canTap = computed(() => !!(live.box && previewCode.value))
+const tapLabel = computed(() => previewCode.value ? `Tap to add ${previewCode.value}` : 'Tap to add')
+
+function placeBoxFromDetection(first:any){
+  const el = videoBox.value as HTMLElement | null
+  const vid = el?.querySelector('video') as HTMLVideoElement | null
+  if(!el || !vid){ live.box = null; return }
+
+  // derive raw box (video coordinates)
+  let x=0,y=0,w=0,h=0
+  const bb = first?.boundingBox
+  if(bb && typeof bb.x==='number'){
+    x = bb.x; y = bb.y; w = bb.width; h = bb.height
+  }else if(Array.isArray(first?.cornerPoints) && first.cornerPoints.length){
+    const xs = first.cornerPoints.map((p:any)=>p.x)
+    const ys = first.cornerPoints.map((p:any)=>p.y)
+    const minX = Math.min(...xs), maxX = Math.max(...xs)
+    const minY = Math.min(...ys), maxY = Math.max(...ys)
+    x = minX; y = minY; w = maxX - minX; h = maxY - minY
+  }else{
+    live.box = null; return
+  }
+
+  // map to displayed video rect (object-fit: contain)
+  const cw = el.clientWidth, ch = el.clientHeight
+  const vw = vid.videoWidth || cw, vh = vid.videoHeight || ch
+  const scale = Math.min(cw / vw, ch / vh)
+  const dispW = vw * scale, dispH = vh * scale
+  const offL = (cw - dispW) / 2, offT = (ch - dispH) / 2
+
+  live.box = {
+    left: offL + x * scale,
+    top:  offT + y * scale,
+    width:  w * scale,
+    height: h * scale
+  }
+
+  if(boxTimer) clearTimeout(boxTimer as any)
+  boxTimer = setTimeout(() => { live.box = null }, 350) as any  // brief persistence
+}
 function onDetect(payload:any){
   const first = (payload as any[])[0]
   const text = String(first?.rawValue ?? '').trim()
   const fmt = String(first?.format ?? '').toLowerCase() as Format | undefined
   live.raw = text || null
   live.fmt = fmt
+  if (text) placeBoxFromDetection(first)
 }
 function tapToAdd(){
-  if(!previewCode.value || !live.raw) return
+  if(!canTap.value || !live.raw) return
   processScan(live.raw, live.fmt)
 }
 
-/* Scan commit */
+/* Commit scan */
 const knownCount = computed(() => verifyRows.filter(r=>r.ok).length)
 const unknownCount = computed(() => verifyRows.filter(r=>!r.ok).length)
 const builderRows = computed(() => [...builder.entries()].map(([code, v]) => ({ code, qty:v.qty, desc:v.desc || catalog.get(code) || '' })))
@@ -513,3 +565,14 @@ function playBeep(){
   o.frequency.value = 880; g.gain.value = 0.1; o.start(); setTimeout(()=>{ o.stop(); ctx.close() }, 120)
 }
 </script>
+
+<style scoped>
+/* minimal bbox styling; inherits theme colors */
+.bbox{
+  position:absolute;
+  border:2px solid var(--brand);
+  border-radius:4px;          /* why: soft edges improve visibility */
+  box-shadow:0 0 0 2px rgba(0,0,0,.12), 0 4px 10px rgba(0,0,0,.18);
+  pointer-events:none;
+}
+</style>
