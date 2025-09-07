@@ -53,14 +53,13 @@
           v-if="scanning"
           :constraints="cameraConstraints"
           :formats="activeFormats"
-          :track="paintTrack"
+          :track="paintTrack"          <!-- painter drives preview on/off -->
           @camera-on="onCameraReady"
-          @detect="onDetect"
           @error="onError"
         />
       </div>
 
-      <!-- Tap-to-add: only when recent detection window is alive + valid preview -->
+      <!-- Tap-to-add: enabled only when painter has set a code -->
       <div class="row" style="margin-top:8px">
         <button class="btn" style="flex:1" :disabled="!canTap" @click="tapToAdd">
           {{ tapLabel }}
@@ -270,7 +269,7 @@
 
 <script setup lang="ts">
 import { QrcodeStream } from 'vue-qrcode-reader'
-import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, watch, nextTick, onMounted } from 'vue'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import { exportCSV, exportXLSX, exportPDF } from './utils/exporters'
@@ -332,7 +331,7 @@ function toggleCamera(){
     scanning.value=false
     if(videoTrack.value){ try{ (videoTrack.value as any).applyConstraints?.({ advanced:[{ torch:false }] }) }catch{} }
     torchOn.value=false
-    detectAlive.value = false; clearPreview()  /* clear on stop */
+    clearPreview()                      /* why: stop should clear */
   }else{
     scanning.value=true
   }
@@ -445,18 +444,9 @@ onMounted(() => {
   try{ const C = JSON.parse(localStorage.getItem(LS.catalog)||'[]') as [string,string][]; catalog.clear(); for(const [c,d] of C) catalog.set(c,d) }catch{}
 })
 
-/* Live detection -> “recent detection window” */
-type DetectedEvt = { rawValue?: string; format?: string }
+/* Live preview from bbox painter (no timers) */
+type Detected = { boundingBox?: {x:number;y:number;width:number;height:number}; rawValue?: string; format?: string }
 const live = reactive<{ raw: string | null; fmt?: Format }>({ raw: null, fmt: undefined })
-const detectAlive = ref(false)
-let detectTimer: number | undefined
-
-function pulseDetect(ms=900){
-  detectAlive.value = true
-  if(detectTimer) clearTimeout(detectTimer as any)
-  detectTimer = setTimeout(() => { detectAlive.value = false; clearPreview() }, ms) as any
-}
-watch(detectAlive, v => { if(!v) clearPreview() })
 
 function clearPreview(){ live.raw = null; live.fmt = undefined }
 
@@ -471,50 +461,57 @@ const previewCode = computed<string>(() => {
   }
   return code
 })
-const canTap = computed(() => scanning.value && detectAlive.value && !!previewCode.value)
+const canTap = computed(() => scanning.value && !!previewCode.value)
 const tapLabel = computed(() => previewCode.value ? `Tap to add ${previewCode.value}` : 'Tap to add')
 
-function onDetect(payload:any){
-  const first = (payload as DetectedEvt[])[0]
-  const text = String(first?.rawValue ?? '').trim()
-  const fmt  = String(first?.format ?? '').toLowerCase() as Format | undefined
-  if(text){
-    live.raw = text
-    live.fmt = fmt
-    pulseDetect(900)   /* why: keep button alive while detects keep arriving; drops ~0.9s after last detect */
-  }
-}
-
-/* Painter: bbox + text (visual only) */
-type Detected = { boundingBox?: {x:number;y:number;width:number;height:number}; rawValue?: string }
+/* Painter sets/clears live.raw each frame based on bbox presence */
 function paintTrack(codes: Detected[], ctx: CanvasRenderingContext2D) {
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
-  if (!codes?.length) return
-  const root = getComputedStyle(document.documentElement)
-  const brand = (root.getPropertyValue('--brand') || '#2e7d32').trim()
-  const bg = (root.getPropertyValue('--overlayBg') || 'rgba(0,0,0,.65)').trim()
-  const fg = (root.getPropertyValue('--overlayFg') || '#fff').trim()
 
-  ctx.save()
-  ctx.lineWidth = 3
-  ctx.strokeStyle = brand
-  ctx.fillStyle = bg
-  ctx.font = '600 14px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
-  for (const c of codes) {
-    const bb = c?.boundingBox; if (!bb) continue
-    ctx.strokeRect(bb.x, bb.y, bb.width, bb.height)
-    if (c?.rawValue) {
-      const text = String(c.rawValue), pad = 4
-      const m = ctx.measureText(text)
-      const tw = m.width + pad * 2, th = 18 + pad * 2
-      const tx = Math.max(2, bb.x), ty = Math.max(th + 2, bb.y)
-      ctx.fillRect(tx, ty - th, tw, th)
-      ctx.fillStyle = fg
-      ctx.fillText(text, tx + pad, ty - 6)
-      ctx.fillStyle = bg
+  let bestText: string | null = null
+  let bestFmt: Format | undefined = undefined
+  let bestArea = 0
+
+  if (codes?.length) {
+    const root = getComputedStyle(document.documentElement)
+    const brand = (root.getPropertyValue('--brand') || '#2e7d32').trim()
+    const bg = (root.getPropertyValue('--overlayBg') || 'rgba(0,0,0,.65)').trim()
+    const fg = (root.getPropertyValue('--overlayFg') || '#fff').trim()
+
+    ctx.save()
+    ctx.lineWidth = 3
+    ctx.strokeStyle = brand
+    ctx.fillStyle = bg
+    ctx.font = '600 14px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+    for (const c of codes) {
+      const bb = c?.boundingBox; if (!bb) continue
+      const area = Math.max(0, bb.width) * Math.max(0, bb.height)
+      ctx.strokeRect(bb.x, bb.y, bb.width, bb.height)
+
+      if (c?.rawValue) {
+        if (area > bestArea) {
+          bestArea = area
+          bestText = String(c.rawValue).trim() || null
+          bestFmt = (String(c.format||'').toLowerCase() || undefined) as Format | undefined
+        }
+        const text = String(c.rawValue), pad = 4
+        const m = ctx.measureText(text)
+        const tw = m.width + pad * 2, th = 18 + pad * 2
+        const tx = Math.max(2, bb.x), ty = Math.max(th + 2, bb.y)
+        ctx.fillRect(tx, ty - th, tw, th)
+        ctx.fillStyle = fg
+        ctx.fillText(text, tx + pad, ty - 6)
+        ctx.fillStyle = bg
+      }
     }
+    ctx.restore()
   }
-  ctx.restore()
+
+  if (bestText) {
+    if (live.raw !== bestText) { live.raw = bestText; live.fmt = bestFmt }
+  } else {
+    if (live.raw !== null) { clearPreview() }     /* why: no bbox with code -> disable Tap immediately */
+  }
 }
 
 function tapToAdd(){
@@ -604,12 +601,12 @@ function playBeep(){
 :deep(video){ position:relative; z-index:1; }
 
 /* Tables */
-.table{ width:100%; border-collapse:collapse; table-layout:fixed; } /* fixed + colgroup = no horiz scroll */
+.table{ width:100%; border-collapse:collapse; table-layout:fixed; }
 .table th,.table td{ padding:8px 10px; vertical-align:middle; }
 .barcode-col{ width:auto; }
 .barcode-text{
   display:inline-block;
-  min-width:20ch;         /* show ~20 chars */
+  min-width:20ch;         /* show ~20 chars when space allows */
   max-width:100%;
   white-space:nowrap;
   overflow:hidden;
