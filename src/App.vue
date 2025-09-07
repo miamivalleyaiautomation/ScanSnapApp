@@ -60,7 +60,7 @@
         />
       </div>
 
-      <!-- Tap-to-add: only enabled when bbox is present AND a valid preview exists -->
+      <!-- Tap-to-add: requires scanning + bbox active + valid preview -->
       <div class="row" style="margin-top:8px">
         <button class="btn" style="flex:1" :disabled="!canTap" @click="tapToAdd">
           {{ tapLabel }}
@@ -85,9 +85,9 @@
 
       <!-- QUICK LIST -->
       <div v-if="mode==='quick'">
-        <table class="table">
+        <table class="table flexwide">
           <colgroup>
-            <col />                 <!-- barcode flex -->
+            <col />                 <!-- barcode flexible -->
             <col style="width:220px" />
             <col style="width:56px" />
           </colgroup>
@@ -116,9 +116,9 @@
 
       <!-- VERIFY -->
       <div v-if="mode==='verify'">
-        <table class="table">
+        <table class="table flexwide">
           <colgroup>
-            <col />                 <!-- barcode flex -->
+            <col />                 <!-- barcode flexible -->
             <col style="width:120px" />
             <col style="width:56px" />
           </colgroup>
@@ -148,9 +148,9 @@
 
       <!-- ORDER BUILDER -->
       <div v-if="mode==='builder'">
-        <table class="table">
+        <table class="table flexwide">
           <colgroup>
-            <col />                 <!-- barcode/desc flex -->
+            <col />                 <!-- barcode/desc flexible -->
             <col style="width:220px" />
             <col style="width:56px" />
           </colgroup>
@@ -222,7 +222,7 @@
         <span class="kbd">Duplicates collapsed: {{ importStats.duplicates }}</span>
       </div>
 
-      <table class="table catalog">
+      <table class="table catalog flexwide">
         <colgroup><col style="width:42%" /><col style="width:58%" /></colgroup>
         <thead><tr><th class="barcode">Barcode</th><th class="desc">Description</th></tr></thead>
         <tbody>
@@ -253,7 +253,7 @@
         <label class="kbd no-wrap"><input type="checkbox" :checked="matrixOn" @change="toggleMatrix($event)" /> matrix_codes</label>
       </div>
 
-      <table class="table setup">
+      <table class="table setup flexwide">
         <thead><tr><th>Format</th><th>Trim Prefix</th><th>Trim Suffix</th><th class="center">Enabled</th></tr></thead>
         <tbody>
           <tr v-for="f in formatList" :key="f">
@@ -270,7 +270,7 @@
 
 <script setup lang="ts">
 import { QrcodeStream } from 'vue-qrcode-reader'
-import { ref, reactive, computed, watch, nextTick, onMounted } from 'vue'
+import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import { exportCSV, exportXLSX, exportPDF } from './utils/exporters'
@@ -332,7 +332,7 @@ function toggleCamera(){
     scanning.value=false
     if(videoTrack.value){ try{ (videoTrack.value as any).applyConstraints?.({ advanced:[{ torch:false }] }) }catch{} }
     torchOn.value=false
-    clearPreview()                                /* clear when camera stops */
+    clearPreview()                                /* why: stop should also clear */
   }else{
     scanning.value=true
   }
@@ -443,20 +443,42 @@ onMounted(() => {
   try{ const V = JSON.parse(localStorage.getItem(LS.verify)||'[]') as {code:string,ok:boolean}[]; verifyRows.splice(0, verifyRows.length, ...(V||[])) }catch{}
   try{ const B = JSON.parse(localStorage.getItem(LS.builder)||'[]') as [string,{qty:number,desc?:string}][]; for(const [c,v] of B) builder.set(c,v) }catch{}
   try{ const C = JSON.parse(localStorage.getItem(LS.catalog)||'[]') as [string,string][]; catalog.clear(); for(const [c,d] of C) catalog.set(c,d) }catch{}
+  startHeartbeat()
+  document.addEventListener('visibilitychange', onVis)
+})
+onBeforeUnmount(() => {
+  stopHeartbeat()
+  document.removeEventListener('visibilitychange', onVis)
 })
 
-/* Live detection gated by BBOX presence */
+/* Live detection + bbox gating via RAF heartbeat */
 type DetectedEvt = { rawValue?: string; format?: string }
 const live = reactive<{ raw: string | null; fmt?: Format }>({ raw: null, fmt: undefined })
 const boxesActive = ref(false)
+let lastBoxesAt = 0
+let rafId = 0
 
-function clearPreview(){
-  live.raw = null
-  live.fmt = undefined
+function onVis(){ if(document.hidden){ boxesActive.value = false; clearPreview() } }
+
+function startHeartbeat(){
+  const tick = () => {
+    const now = performance.now()
+    const active = scanning.value && (now - lastBoxesAt) < 200   /* why: treat bbox as active only if seen recently */
+    if (boxesActive.value !== active){
+      boxesActive.value = active
+      if(!active) clearPreview()
+    }
+    rafId = requestAnimationFrame(tick)
+  }
+  stopHeartbeat()
+  rafId = requestAnimationFrame(tick)
 }
+function stopHeartbeat(){ if(rafId){ cancelAnimationFrame(rafId); rafId = 0 } }
+
+function clearPreview(){ live.raw = null; live.fmt = undefined }
+
 const previewCode = computed<string>(() => {
-  const raw = live.raw?.trim()
-  if(!raw) return ''
+  const raw = live.raw?.trim(); if(!raw) return ''
   let code = raw
   const f = live.fmt
   if(f){
@@ -466,7 +488,6 @@ const previewCode = computed<string>(() => {
   }
   return code
 })
-/* enable Tap only with scanning + bbox + valid preview */
 const canTap = computed(() => scanning.value && boxesActive.value && !!previewCode.value)
 const tapLabel = computed(() => previewCode.value ? `Tap to add ${previewCode.value}` : 'Tap to add')
 
@@ -476,17 +497,16 @@ function onDetect(payload:any){
   const fmt  = String(first?.format ?? '').toLowerCase() as Format | undefined
   if(text){ live.raw = text; live.fmt = fmt }
 }
-/* Painter drives bbox state; clears immediately when no boxes */
+
+/* Painter marks lastBoxesAt; if no boxes drawn recently, heartbeat clears preview */
 type Detected = { boundingBox?: {x:number;y:number;width:number;height:number}; rawValue?: string }
 function paintTrack(codes: Detected[], ctx: CanvasRenderingContext2D) {
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
 
-  if (!codes?.length) {
-    boxesActive.value = false
-    clearPreview()
-    return
-  }
-  boxesActive.value = true
+  const hasBox = !!(codes && codes.length && codes.some(c => c?.boundingBox && c.boundingBox.width > 0 && c.boundingBox.height > 0))
+  if (hasBox) lastBoxesAt = performance.now()
+
+  if (!hasBox) return
 
   const root = getComputedStyle(document.documentElement)
   const brand = (root.getPropertyValue('--brand') || '#2e7d32').trim()
@@ -514,6 +534,7 @@ function paintTrack(codes: Detected[], ctx: CanvasRenderingContext2D) {
   }
   ctx.restore()
 }
+
 function tapToAdd(){
   const code = previewCode.value
   if(!code) return
@@ -537,7 +558,7 @@ function commitCode(code:string){
     quickList.set(code, (quickList.get(code) || 0) + 1)
     setLast(code, quickList.get(code)!)
   } else if(mode.value==='verify'){
-    const ok = catalog.has(code)             /* with empty catalog -> all unknown */
+    const ok = catalog.has(code)
     const i = verifyRows.findIndex(r => r.code === code)
     if (i >= 0) { verifyRows[i] = { code, ok } } else { verifyRows.push({ code, ok }) }
     setLast(code, 1)
@@ -601,21 +622,20 @@ function playBeep(){
 :deep(video){ position:relative; z-index:1; }
 
 /* Tables */
-.table{ width:100%; border-collapse:collapse; table-layout:fixed; } /* fixed to prevent horizontal scroll */
+.table{ width:100%; border-collapse:collapse; }
+.table.flexwide{ table-layout:auto; }
 .table th,.table td{ padding:8px 10px; vertical-align:middle; }
 .barcode-col{ width:auto; }
 .barcode-text{
   display:inline-block;
-  min-width:20ch;            /* show ~20 chars when space allows */
+  min-width:20ch;         /* show ~20 chars */
   max-width:100%;
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
   font-variant-numeric: tabular-nums;
 }
-@media (max-width:420px){
-  .barcode-text{ font-size:12px; } /* help fit 20ch on small screens */
-}
+@media (max-width:420px){ .barcode-text{ font-size:12px; } }
 
 .ellipsis{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .center{ text-align:center; }
