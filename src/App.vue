@@ -140,8 +140,12 @@
       <h3 style="margin-top:2px">Import Catalog</h3>
       <div class="row">
         <input class="input" type="file" accept=".csv,.xls,.xlsx" @change="onFile">
-        <input class="input" v-model="search" placeholder="Search code/description...">
+        <!-- NEW: barcode-only search -->
+        <input class="input" v-model="searchBarcode" placeholder="Search barcode...">
+        <!-- Keep general search (desc or code) -->
+        <input class="input" v-model="search" placeholder="Search description or barcode...">
         <div class="kbd">{{ catalog.size }} items</div>
+        <button class="btn warn" style="margin-left:auto" @click="clearCatalog">Clear Catalog</button>
       </div>
       <div v-if="columns.length" class="row" style="margin-top:10px">
         <div>Barcode column:</div>
@@ -286,17 +290,27 @@ function disableAll(){ formatList.forEach(f => enabled[f] = false) }
 
 /* Catalog data */
 const catalog = reactive(new Map<string,string>())
-const search = ref('')
+const search = ref('')           // general search: code or description
+const searchBarcode = ref('')    // NEW: barcode-only search
 const columns = ref<string[]>([])
 const barcodeCol = ref<string>('')
 const descCol = ref<string>('')
 
 const filteredCatalog = computed(() => {
-  const q = search.value.trim().toLowerCase()
+  // Build full list, then filter (no 1000-row cap)
   const rows: {barcode:string, description:string}[] = []
+  const qCode = searchBarcode.value.trim()
+  const qAny = search.value.trim().toLowerCase()
+
   for (const [code, desc] of catalog) {
-    if(!q || code.includes(q) || (desc||'').toLowerCase().includes(q)) rows.push({ barcode: code, description: desc })
-    if(rows.length>1000) break
+    if (qCode) {
+      if (code.includes(qCode)) rows.push({ barcode: code, description: desc })
+    } else if (qAny) {
+      if (code.toLowerCase().includes(qAny) || (desc||'').toLowerCase().includes(qAny))
+        rows.push({ barcode: code, description: desc })
+    } else {
+      rows.push({ barcode: code, description: desc })
+    }
   }
   return rows
 })
@@ -309,28 +323,51 @@ function guessCols(h: string[]){
 async function onFile(e: Event){
   const file = (e.target as HTMLInputElement).files?.[0]; if(!file) return
   const ext = file.name.split('.').pop()?.toLowerCase()
-  let rows: any[] = []
+  let rows: Record<string, unknown>[] = []
+
   if(ext === 'csv'){
-    rows = await new Promise<any[]>((res, rej)=>{
-      Papa.parse(file, { header:true, skipEmptyLines:true, complete: r => res(r.data as any[]), error: rej })
+    // Import ALL rows; be generous about empty lines
+    rows = await new Promise<Record<string, unknown>[]>((res, rej)=>{
+      Papa.parse<Record<string, unknown>>(file, {
+        header: true,
+        skipEmptyLines: 'greedy',
+        dynamicTyping: false,
+        complete: r => res(r.data as Record<string, unknown>[]),
+        error: rej
+      })
     })
-  }else{
+  } else {
     const data = await file.arrayBuffer()
-    const wb = XLSX.read(data)
+    const wb = XLSX.read(data, { type: 'array' })
     const ws = wb.Sheets[wb.SheetNames[0]]
-    rows = XLSX.utils.sheet_to_json(ws) as any[]
+    rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
+      raw: false,
+      defval: '',       // keep empty cells
+      blankrows: false
+    })
   }
+
   if(!rows.length) return
-  const headers = Object.keys(rows[0] as object)
+  const headers = Object.keys(rows[0] ?? {})
   columns.value = headers
   guessCols(headers)
+
   catalog.clear()
   for(const r of rows){
-    const code = String(r[barcodeCol.value] ?? '').trim()
+    const code = String((r as any)[barcodeCol.value] ?? '').trim()
     if(!code) continue
-    const desc = descCol.value ? String(r[descCol.value] ?? '').trim() : ''
+    const desc = descCol.value ? String((r as any)[descCol.value] ?? '').trim() : ''
     catalog.set(code, desc)
   }
+}
+
+function clearCatalog(){
+  catalog.clear()
+  columns.value = []
+  barcodeCol.value = ''
+  descCol.value = ''
+  search.value = ''
+  searchBarcode.value = ''
 }
 
 /* Mode state */
