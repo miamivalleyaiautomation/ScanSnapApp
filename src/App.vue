@@ -60,7 +60,7 @@
         />
       </div>
 
-      <!-- Tap-to-add: requires scanning + bbox active + valid preview -->
+      <!-- Tap-to-add: only when recent detection window is alive + valid preview -->
       <div class="row" style="margin-top:8px">
         <button class="btn" style="flex:1" :disabled="!canTap" @click="tapToAdd">
           {{ tapLabel }}
@@ -85,9 +85,9 @@
 
       <!-- QUICK LIST -->
       <div v-if="mode==='quick'">
-        <table class="table flexwide">
+        <table class="table">
           <colgroup>
-            <col />                 <!-- barcode flexible -->
+            <col />                 <!-- barcode flex -->
             <col style="width:220px" />
             <col style="width:56px" />
           </colgroup>
@@ -116,9 +116,9 @@
 
       <!-- VERIFY -->
       <div v-if="mode==='verify'">
-        <table class="table flexwide">
+        <table class="table">
           <colgroup>
-            <col />                 <!-- barcode flexible -->
+            <col />                 <!-- barcode flex -->
             <col style="width:120px" />
             <col style="width:56px" />
           </colgroup>
@@ -148,9 +148,9 @@
 
       <!-- ORDER BUILDER -->
       <div v-if="mode==='builder'">
-        <table class="table flexwide">
+        <table class="table">
           <colgroup>
-            <col />                 <!-- barcode/desc flexible -->
+            <col />                 <!-- barcode/desc flex -->
             <col style="width:220px" />
             <col style="width:56px" />
           </colgroup>
@@ -222,7 +222,7 @@
         <span class="kbd">Duplicates collapsed: {{ importStats.duplicates }}</span>
       </div>
 
-      <table class="table catalog flexwide">
+      <table class="table catalog">
         <colgroup><col style="width:42%" /><col style="width:58%" /></colgroup>
         <thead><tr><th class="barcode">Barcode</th><th class="desc">Description</th></tr></thead>
         <tbody>
@@ -253,7 +253,7 @@
         <label class="kbd no-wrap"><input type="checkbox" :checked="matrixOn" @change="toggleMatrix($event)" /> matrix_codes</label>
       </div>
 
-      <table class="table setup flexwide">
+      <table class="table setup">
         <thead><tr><th>Format</th><th>Trim Prefix</th><th>Trim Suffix</th><th class="center">Enabled</th></tr></thead>
         <tbody>
           <tr v-for="f in formatList" :key="f">
@@ -332,7 +332,7 @@ function toggleCamera(){
     scanning.value=false
     if(videoTrack.value){ try{ (videoTrack.value as any).applyConstraints?.({ advanced:[{ torch:false }] }) }catch{} }
     torchOn.value=false
-    clearPreview()                                /* why: stop should also clear */
+    detectAlive.value = false; clearPreview()  /* clear on stop */
   }else{
     scanning.value=true
   }
@@ -443,37 +443,20 @@ onMounted(() => {
   try{ const V = JSON.parse(localStorage.getItem(LS.verify)||'[]') as {code:string,ok:boolean}[]; verifyRows.splice(0, verifyRows.length, ...(V||[])) }catch{}
   try{ const B = JSON.parse(localStorage.getItem(LS.builder)||'[]') as [string,{qty:number,desc?:string}][]; for(const [c,v] of B) builder.set(c,v) }catch{}
   try{ const C = JSON.parse(localStorage.getItem(LS.catalog)||'[]') as [string,string][]; catalog.clear(); for(const [c,d] of C) catalog.set(c,d) }catch{}
-  startHeartbeat()
-  document.addEventListener('visibilitychange', onVis)
-})
-onBeforeUnmount(() => {
-  stopHeartbeat()
-  document.removeEventListener('visibilitychange', onVis)
 })
 
-/* Live detection + bbox gating via RAF heartbeat */
+/* Live detection -> “recent detection window” */
 type DetectedEvt = { rawValue?: string; format?: string }
 const live = reactive<{ raw: string | null; fmt?: Format }>({ raw: null, fmt: undefined })
-const boxesActive = ref(false)
-let lastBoxesAt = 0
-let rafId = 0
+const detectAlive = ref(false)
+let detectTimer: number | undefined
 
-function onVis(){ if(document.hidden){ boxesActive.value = false; clearPreview() } }
-
-function startHeartbeat(){
-  const tick = () => {
-    const now = performance.now()
-    const active = scanning.value && (now - lastBoxesAt) < 200   /* why: treat bbox as active only if seen recently */
-    if (boxesActive.value !== active){
-      boxesActive.value = active
-      if(!active) clearPreview()
-    }
-    rafId = requestAnimationFrame(tick)
-  }
-  stopHeartbeat()
-  rafId = requestAnimationFrame(tick)
+function pulseDetect(ms=900){
+  detectAlive.value = true
+  if(detectTimer) clearTimeout(detectTimer as any)
+  detectTimer = setTimeout(() => { detectAlive.value = false; clearPreview() }, ms) as any
 }
-function stopHeartbeat(){ if(rafId){ cancelAnimationFrame(rafId); rafId = 0 } }
+watch(detectAlive, v => { if(!v) clearPreview() })
 
 function clearPreview(){ live.raw = null; live.fmt = undefined }
 
@@ -488,26 +471,25 @@ const previewCode = computed<string>(() => {
   }
   return code
 })
-const canTap = computed(() => scanning.value && boxesActive.value && !!previewCode.value)
+const canTap = computed(() => scanning.value && detectAlive.value && !!previewCode.value)
 const tapLabel = computed(() => previewCode.value ? `Tap to add ${previewCode.value}` : 'Tap to add')
 
 function onDetect(payload:any){
   const first = (payload as DetectedEvt[])[0]
   const text = String(first?.rawValue ?? '').trim()
   const fmt  = String(first?.format ?? '').toLowerCase() as Format | undefined
-  if(text){ live.raw = text; live.fmt = fmt }
+  if(text){
+    live.raw = text
+    live.fmt = fmt
+    pulseDetect(900)   /* why: keep button alive while detects keep arriving; drops ~0.9s after last detect */
+  }
 }
 
-/* Painter marks lastBoxesAt; if no boxes drawn recently, heartbeat clears preview */
+/* Painter: bbox + text (visual only) */
 type Detected = { boundingBox?: {x:number;y:number;width:number;height:number}; rawValue?: string }
 function paintTrack(codes: Detected[], ctx: CanvasRenderingContext2D) {
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
-
-  const hasBox = !!(codes && codes.length && codes.some(c => c?.boundingBox && c.boundingBox.width > 0 && c.boundingBox.height > 0))
-  if (hasBox) lastBoxesAt = performance.now()
-
-  if (!hasBox) return
-
+  if (!codes?.length) return
   const root = getComputedStyle(document.documentElement)
   const brand = (root.getPropertyValue('--brand') || '#2e7d32').trim()
   const bg = (root.getPropertyValue('--overlayBg') || 'rgba(0,0,0,.65)').trim()
@@ -622,8 +604,7 @@ function playBeep(){
 :deep(video){ position:relative; z-index:1; }
 
 /* Tables */
-.table{ width:100%; border-collapse:collapse; }
-.table.flexwide{ table-layout:auto; }
+.table{ width:100%; border-collapse:collapse; table-layout:fixed; } /* fixed + colgroup = no horiz scroll */
 .table th,.table td{ padding:8px 10px; vertical-align:middle; }
 .barcode-col{ width:auto; }
 .barcode-text{
