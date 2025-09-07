@@ -1,57 +1,95 @@
+/* FILE: src/style.css */
+
+/* ---------- Theme tokens ---------- */
 :root{
-  --bg:#0f1115;--panel:#161a22;--panel2:#0c0f14;--muted:#2a3140;
-  --text:#e9edf1;--text-dim:#aab2c0;--brand:#3b82f6;--ok:#22c55e;--bad:#ef4444;
-  --chip:#0b1220;--shadow:0 12px 30px rgba(0,0,0,.35);--radius:14px
+  --bg:#0f1115; --panel:#161a22; --panel2:#0c0f14; --muted:#2a3140;
+  --text:#ffffff;            /* dark: white text */
+  --text-dim:#cbd5e1;
+  --brand:#3b82f6; --ok:#22c55e; --bad:#ef4444;
+  --chip:#0b1220; --shadow:0 12px 30px rgba(0,0,0,.35); --radius:14px;
+
+  --pill-border: var(--muted); /* dark: leave pills border as-is */
 }
+
 :root.light{
-  --bg:#f6f7fb;--panel:#fff;--panel2:#f2f4f8;--muted:#e5e7eb;
-  --text:#0b1220;--text-dim:#5b6474;--brand:#2563eb;--chip:#eef2ff;--shadow:0 12px 30px rgba(0,0,0,.08)
+  --bg:#f6f7fb; --panel:#ffffff; --panel2:#f2f4f8; --muted:#e5e7eb;
+  --text:#000000;            /* light: black text */
+  --text-dim:#374151;
+  --brand:#2563eb; --chip:#eef2ff; --shadow:0 12px 30px rgba(0,0,0,.08);
+
+  --pill-border:#4b5563;     /* light: dark gray pills border (except selected) */
 }
+
+/* ---------- Base ---------- */
 *{box-sizing:border-box}
 html,body,#app{height:100%}
-body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text)}
+body{
+  margin:0;
+  font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+}
 
-/* FULL-WIDTH LAYOUT */
 .container{max-width:100%;padding:12px 16px 80px}
 .header{display:flex;align-items:center;justify-content:space-between}
 .logo{display:flex;align-items:center;gap:10px}
 .logo img{height:28px}
 .logo .word{height:26px}
-.theme-toggle{border:1px solid var(--muted);background:transparent;color:var(--text);padding:6px 12px;border-radius:999px;cursor:pointer}
+.theme-toggle{
+  border:1px solid var(--muted);background:transparent;color:var(--text);
+  padding:6px 12px;border-radius:999px;cursor:pointer
+}
 
-/* TABS STRETCH */
+/* ---------- Tabs / Pills ---------- */
 .tabs{display:flex;gap:10px;margin:10px 0 14px}
-.tab{flex:1 1 0;padding:12px 16px;border-radius:12px;border:1px solid var(--muted);background:var(--panel2);cursor:pointer;text-align:center}
+.tab{
+  flex:1 1 0;padding:12px 16px;border-radius:12px;
+  border:1px solid var(--pill-border);          /* pill border by theme */
+  background:var(--panel2);cursor:pointer;text-align:center;color:var(--text)
+}
 .tab.active{outline:2px solid var(--brand);background:transparent}
+/* light-only: selected pill border should not be dark gray */
+:root.light .tab.active{ border-color: var(--brand); }
 
-/* SUB-TABS (Quick/Verify/Builder) SAME LOOK & STRETCH */
 .chips{display:flex;gap:8px;flex-wrap:nowrap;width:100%}
 .chips .tab{flex:1 1 0}
 
-/* PANELS & CONTROLS */
+/* ---------- Panels & Inputs ---------- */
 .panel{background:var(--panel);border:1px solid var(--muted);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow)}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.btn{border:1px solid var(--muted);background:var(--brand);color:#fff;padding:10px 14px;border-radius:12px;cursor:pointer}
+
+.btn{
+  border:1px solid var(--muted);background:var(--brand);color:#fff;
+  padding:10px 14px;border-radius:12px;cursor:pointer
+}
 .btn.ghost{background:transparent;color:var(--text)}
 .btn.warn{background:var(--bad)}
-.input{border:1px solid var(--muted);background:var(--panel2);border-radius:10px;padding:10px;color:var(--text)}
 
-/* VIDEO */
-.video{position:relative;width:100%;aspect-ratio:16/9;border:1px solid var(--muted);border-radius:12px;overflow:hidden;background:#000}
+.input{
+  border:1px solid var(--muted);background:var(--panel2);
+  border-radius:10px;padding:10px;color:var(--text)
+}
 
-/* TABLES STRETCH */
+/* ---------- Video ---------- */
+.video{
+  position:relative;width:100%;aspect-ratio:16/9;
+  border:1px solid var(--muted);border-radius:12px;overflow:hidden;background:#000
+}
+
+/* ---------- Table ---------- */
 .table{width:100%;border-collapse:separate;border-spacing:0;margin-top:10px}
 .table th,.table td{padding:10px;border-bottom:1px solid var(--muted);text-align:left}
 .table th{color:var(--text-dim);font-weight:600}
 
-/* SMALL ELEMENTS */
-.kbd{border:1px solid var(--muted);border-radius:6px;padding:4px 6px;background:var(--panel2)}
-.icon-btn{display:inline-grid;place-items:center;width:36px;height:36px;border-radius:10px;border:1px solid var(--muted);background:var(--panel2);cursor:pointer}
+/* ---------- Misc ---------- */
+.kbd{border:1px solid var(--muted);border-radius:6px;padding:4px 6px;background:var(--panel2);color:var(--text)}
+.icon-btn{
+  display:inline-grid;place-items:center;width:36px;height:36px;border-radius:10px;
+  border:1px solid var(--muted);background:var(--panel2);cursor:pointer;color:var(--text)
+}
 .icon-btn.danger{background:var(--bad);border-color:transparent;color:#fff}
 .mini{display:flex;align-items:center;gap:8px;margin:8px 0}
 hr.sep{border:0;border-top:1px solid var(--muted);margin:12px 0}
-
-/* VERIFY SUMMARY (UNDER TABLE) */
 .verify-summary{display:flex;gap:16px;margin-top:10px}
 .verify-summary .ok{color:var(--ok);font-weight:700}
 .verify-summary .bad{color:var(--bad);font-weight:700}
