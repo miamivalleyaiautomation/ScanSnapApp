@@ -88,10 +88,10 @@
           <tbody>
             <tr v-for="([code, qty]) in quickEntries" :key="code">
               <td class="barcode-col"><div class="barcode-text">{{ code }}</div></td>
-              <td class="right">
-                <div style="display:inline-flex;gap:8px;align-items:center">
+              <td class="right qty">
+                <div class="qty-wrap">
                   <button class="icon-btn" @click="changeQty('quick', code, -1)">−</button>
-                  <span style="min-width:24px;text-align:center">{{ qty }}</span>
+                  <span class="qty-num">{{ qty }}</span>
                   <button class="icon-btn" @click="changeQty('quick', code, +1)">＋</button>
                 </div>
               </td>
@@ -161,10 +161,10 @@
                          placeholder="Enter description..." style="width:100%" />
                 </template>
               </td>
-              <td class="right">
-                <div style="display:inline-flex;gap:8px;align-items:center">
+              <td class="right qty">
+                <div class="qty-wrap">
                   <button class="icon-btn" @click="changeQty('builder', row.code, -1)">−</button>
-                  <span style="min-width:24px;text-align:center">{{ row.qty }}</span>
+                  <span class="qty-num">{{ row.qty }}</span>
                   <button class="icon-btn" @click="changeQty('builder', row.code, +1)">＋</button>
                 </div>
               </td>
@@ -268,7 +268,7 @@ import {
   type Format, type TrimRules, stripCheckDigit, validateCheckDigit, applyTrims
 } from './utils/barcode'
 
-/* LS keys */
+/* LocalStorage keys */
 const LS = {
   tab:'ui.tab', mode:'ui.mode',
   quick:'data.quickList', verify:'data.verifyRows', builder:'data.builder',
@@ -534,7 +534,7 @@ function paintTrack(codes: Detected[], ctx: CanvasRenderingContext2D) {
   }
 }
 
-/* Commit/exports/controls */
+/* Commit + exports + controls */
 const knownCount = computed(() => verifyRows.filter(r=>r.ok).length)
 const unknownCount = computed(() => verifyRows.filter(r=>!r.ok).length)
 const builderRows = computed(() => [...builder.entries()].map(([code, v]) => ({ code, qty:v.qty, desc:v.desc || '' })))
@@ -544,16 +544,19 @@ function tapToAdd(){ const code = previewCode.value; if(!code) return; commitCod
 function commitCode(code:string){
   if(beep.value) playBeep()
   if(mode.value==='quick'){
-    quickList.set(code, (quickList.get(code) || 0) + 1); setLast(code, quickList.get(code)!)
+    quickList.set(code, (quickList.get(code) || 0) + 1)
+    setLast(code, quickList.get(code)!)
   } else if(mode.value==='verify'){
     const ok = catalog.has(code)
     const i = verifyRows.findIndex(r => r.code === code)
-    if (i >= 0) verifyRows[i] = { code, ok }; else verifyRows.push({ code, ok })
+    if (i >= 0) { verifyRows[i] = { code, ok } } else { verifyRows.push({ code, ok }) }
     setLast(code, 1)
   } else {
     const entry = builder.get(code) || { qty:0, desc: catalog.get(code) || '' }
-    entry.qty += 1; if(!entry.desc && catalog.get(code)) entry.desc = catalog.get(code) || ''
-    builder.set(code, entry); setLast(code, entry.qty)
+    entry.qty += 1
+    if(!entry.desc && catalog.get(code)) entry.desc = catalog.get(code) || ''
+    builder.set(code, entry)
+    setLast(code, entry.qty)
   }
 }
 function setBuilderDesc(code:string, desc:string){ const cur = builder.get(code) || { qty:0, desc:'' }; builder.set(code, { ...cur, desc }) }
@@ -575,12 +578,41 @@ function changeQty(which:'quick'|'builder', code:string, delta:number){
 }
 function removeItem(which:'quick'|'builder', code:string){ if(which==='quick') quickList.delete(code); else builder.delete(code) }
 function removeVerify(code:string){ const i = verifyRows.findIndex(r=>r.code===code); if(i>=0) verifyRows.splice(i,1) }
-function clearMode(which:'quick'|'verify'|'builder'){ if(which==='quick') quickList.clear(); if(which==='verify') verifyRows.splice(0); if(which==='builder') builder.clear() }
+function clearMode(which:'quick'|'verify'|'builder'){
+  if(which==='quick') quickList.clear()
+  if(which==='verify') verifyRows.splice(0)
+  if(which==='builder') builder.clear()
+}
+
+/* Export helpers */
+function exportQuick(type:'csv'|'xlsx'|'pdf'){
+  const rows = [...quickList.entries()].map(([code,qty]) => [code, qty])
+  if(type==='csv') exportCSV('quick-list.csv', rows, ['Barcode','QTY'])
+  if(type==='xlsx') exportXLSX('quick-list.xlsx', rows, ['Barcode','QTY'])
+  if(type==='pdf') exportPDF('quick-list.pdf', rows, ['Barcode','QTY'])
+}
+function exportVerify(type:'csv'|'xlsx'|'pdf'){
+  const rows = verifyRows.map(r => [r.code, r.ok ? 'KNOWN' : 'UNKNOWN'])
+  if(type==='csv') exportCSV('catalog-verify.csv', rows, ['Barcode','Status'])
+  if(type==='xlsx') exportXLSX('catalog-verify.xlsx', rows, ['Barcode','Status'])
+  if(type==='pdf') exportPDF('catalog-verify.pdf', rows, ['Barcode','Status'])
+}
+function exportBuilder(type:'csv'|'xlsx'|'pdf'){
+  const rows = builderRows.value.map(r => [r.code, catalog.get(r.code) || r.desc || '', r.qty])
+  if(type==='csv') exportCSV('order-builder.csv', rows, ['Barcode','Description','QTY'])
+  if(type==='xlsx') exportXLSX('order-builder.xlsx', rows, ['Barcode','Description','QTY'])
+  if(type==='pdf') exportPDF('order-builder.pdf', rows, ['Barcode','Description','QTY'])
+}
 
 /* Toast + Beep */
 const toast = reactive({ show:false, text:'' })
 let toastTimer: number | undefined
-function showToast(text:string, ms=900){ toast.text = text; toast.show = true; if(toastTimer) clearTimeout(toastTimer as any); toastTimer = setTimeout(() => { toast.show = false }, ms) as any }
+function showToast(text:string, ms=900){
+  toast.text = text
+  toast.show = true
+  if(toastTimer) clearTimeout(toastTimer as any)
+  toastTimer = setTimeout(() => { toast.show = false }, ms) as any
+}
 function playBeep(){
   const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
   const o = ctx.createOscillator(); const g = ctx.createGain()
@@ -600,7 +632,7 @@ function playBeep(){
   --delCol: 56px;
 }
 .light{ --overlayBg: rgba(255,255,255,.8); --overlayFg: #000; }
-@media (max-width: 420px){
+@media (max-width:420px){
   :root{ --qtyCol: 160px; --statusCol: 84px; }
 }
 
@@ -620,7 +652,7 @@ function playBeep(){
 .barcode-col{ width:auto; }
 .barcode-text{
   display:inline-block;
-  min-width:20ch;           /* ~20 characters visible when space allows */
+  min-width:20ch;  /* show ~20 chars when space allows */
   max-width:100%;
   white-space:nowrap;
   overflow:hidden;
@@ -629,9 +661,29 @@ function playBeep(){
 }
 @media (max-width:420px){ .barcode-text{ font-size:12px; } }
 
-.ellipsis{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.center{ text-align:center; }
 .right{ text-align:right; }
+.center{ text-align:center; }
+.ellipsis{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* QTY alignment tightened near delete button */
+td.qty{ padding-right:6px; }
+.qty-wrap{
+  display:inline-flex;
+  width:100%;
+  justify-content:flex-end;
+  align-items:center;
+  gap:6px;
+}
+.qty-num{ min-width:24px; text-align:center; }
+
+/* theme-friendly trash button */
+.icon-btn.danger{
+  background: var(--brand) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+}
+.icon-btn.danger:hover{ filter: brightness(1.08); }
+.icon-btn.danger:active{ filter: brightness(.96); }
 
 .toast{
   position:absolute;
