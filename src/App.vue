@@ -186,10 +186,12 @@
       </div>
 
       <h3>Scanner Formats</h3>
+      <!-- Row 1: Enable/Disable -->
       <div class="row nowrap" style="margin-bottom:6px">
         <button class="btn ghost" @click="enableAll">Enable all</button>
         <button class="btn ghost" @click="disableAll">Disable all</button>
       </div>
+      <!-- Row 2: Linear/Matrix -->
       <div class="row nowrap" style="margin-bottom:8px">
         <label class="kbd no-wrap"><input type="checkbox" :checked="linearOn" @change="toggleLinear($event)"> linear_codes</label>
         <label class="kbd no-wrap"><input type="checkbox" :checked="matrixOn" @change="toggleMatrix($event)"> matrix_codes</label>
@@ -198,7 +200,7 @@
       <table class="table setup">
         <thead>
           <tr>
-            <th>Format</</th>
+            <th>Format</th>
             <th>Trim Prefix</th>
             <th>Trim Suffix</th>
             <th class="center">Enabled</th>
@@ -232,7 +234,10 @@ import {
 
 /* Theme */
 const isDark = ref(!(localStorage.getItem('theme') === 'light'))
-watch(isDark, v => { document.documentElement.classList.toggle('light', !v); localStorage.setItem('theme', v?'dark':'light') })
+watch(isDark, v => {
+  document.documentElement.classList.toggle('light', !v)
+  localStorage.setItem('theme', v ? 'dark' : 'light')
+})
 document.documentElement.classList.toggle('light', !isDark.value)
 function toggleTheme(){ isDark.value = !isDark.value }
 
@@ -249,7 +254,9 @@ const selectedDeviceId = ref<string|undefined>(undefined)
 const cameraConstraints = computed<MediaTrackConstraints>(() =>
   selectedDeviceId.value ? { deviceId: selectedDeviceId.value } : { facingMode: 'environment' }
 )
-async function requestPermission(){ try{ const s = await navigator.mediaDevices.getUserMedia({ video: true }); s.getTracks().forEach(t=>t.stop()) }catch{} }
+async function requestPermission(){
+  try{ const s = await navigator.mediaDevices.getUserMedia({ video: true }); s.getTracks().forEach(t=>t.stop()) }catch{}
+}
 async function onCameraReady(){
   try{
     const list = await navigator.mediaDevices.enumerateDevices()
@@ -310,7 +317,6 @@ function normalize(s: string){ return s.toLowerCase().replace(/[\s_\-]+/g,'').tr
 /* Prefer true barcode columns over SKU/Code */
 function guessCols(headers: string[]){
   const H = headers.slice()
-  // Priority groups (first match wins, left→right)
   const pri = [
     ['barcode','barcodes'],
     ['upc','upca','upce','upccode'],
@@ -344,7 +350,6 @@ function rebuildCatalogFromSelections(){
   }
   importStats.inserted = catalog.size
 }
-
 watch([barcodeCol, descCol], rebuildCatalogFromSelections)
 
 /* File input: CSV/XLS/XLSX */
@@ -358,7 +363,7 @@ async function onFile(e: Event){
       Papa.parse<Record<string, unknown>>(file, {
         header: true,
         skipEmptyLines: 'greedy',
-        dynamicTyping: false, // keep barcodes as-is (strings)
+        dynamicTyping: false,
         complete: r => res(r.data as Record<string, unknown>[]),
         error: rej
       })
