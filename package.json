@@ -1,19 +1,16 @@
+// FILE: package.json  (replace)
 {
   "name": "scansnap",
   "private": true,
-  "version": "1.2.3",
+  "version": "1.2.5",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "dev:https": "vite --https",
-    "prebuild": "node ./scripts/print-env.mjs && node ./scripts/ci-preflight.mjs",
     "build": "vite build --logLevel info",
-    "build:ci": "vite build --debug --logLevel info",
     "preview": "vite preview"
   },
-  "engines": {
-    "node": "20.x"
-  },
+  "engines": { "node": "20.x" },
   "dependencies": {
     "vue": "3.4.38",
     "vue-qrcode-reader": "5.7.3",
