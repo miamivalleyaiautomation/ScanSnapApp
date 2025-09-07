@@ -143,7 +143,7 @@
         </div>
       </div>
 
-      <!-- ORDER BUILDER -->
+      <!-- ORDER BUILDER (2-row layout: desc spans full width) -->
       <div v-if="mode==='builder'">
         <table class="table builder-table">
           <colgroup>
@@ -152,29 +152,35 @@
           </colgroup>
           <thead><tr><th>Barcode / Description</th><th class="right">QTY</th></tr></thead>
           <tbody>
-            <tr v-for="row in builderRows" :key="row.code">
-              <td class="barcode-col">
-                <div class="stack">
+            <template v-for="row in builderRows" :key="row.code">
+              <!-- main row -->
+              <tr :key="row.code + '-main'">
+                <td class="barcode-col">
                   <div class="barcode-text" style="font-weight:700">{{ row.code }}</div>
+                </td>
+                <td class="qty-cell">
+                  <div class="qty-pack">
+                    <div class="qty-wrap">
+                      <button class="icon-btn" @click="changeQty('builder', row.code, -1)">−</button>
+                      <span class="qty-num">{{ row.qty }}</span>
+                      <button class="icon-btn" @click="changeQty('builder', row.code, +1)">＋</button>
+                    </div>
+                    <button class="icon-btn" @click="removeItem('builder', row.code)" aria-label="Delete">✖</button>
+                  </div>
+                </td>
+              </tr>
+              <!-- description row (spans across to the delete column) -->
+              <tr class="desc-row" :key="row.code + '-desc'">
+                <td :colspan="2">
                   <input
-                    class="input desc-input"
+                    class="input desc-input wide"
                     :value="row.desc"
                     @input="setBuilderDesc(row.code, ($event.target as HTMLInputElement).value)"
                     placeholder="unknown"
                   />
-                </div>
-              </td>
-              <td class="qty-cell">
-                <div class="qty-pack">
-                  <div class="qty-wrap">
-                    <button class="icon-btn" @click="changeQty('builder', row.code, -1)">−</button>
-                    <span class="qty-num">{{ row.qty }}</span>
-                    <button class="icon-btn" @click="changeQty('builder', row.code, +1)">＋</button>
-                  </div>
-                  <button class="icon-btn" @click="removeItem('builder', row.code)" aria-label="Delete">✖</button>
-                </div>
-              </td>
-            </tr>
+                </td>
+              </tr>
+            </template>
           </tbody>
         </table>
         <div class="row" style="margin-top:10px">
@@ -355,7 +361,7 @@ watch(stripCD, v => localStorage.setItem(LS.stripCD, v?'1':'0'))
 watch(validateCD, v => localStorage.setItem(LS.validateCD, v?'1':'0'))
 watch(beep, v => localStorage.setItem(LS.beep, v?'1':'0'))
 
-/* QrcodeStream expects a string[] of format names */
+/* Active formats for the camera */
 const activeFormats = computed(() => {
   const list = formatList.filter(f => enabled[f])
   return list.length ? list : ['qr_code']
@@ -646,7 +652,7 @@ function playBeep(){ const Ctx = (window.AudioContext || (window as any).webkitA
   --edge: rgba(255,255,255,.14);
 
   /* Header sizing */
-  --headerH: 71px;   /* already shrunk by 25px per your request */
+  --headerH: 71px;
   --logoH: 36px;
 
   /* Table width hints */
@@ -713,10 +719,9 @@ td.qty-cell{ padding-right:6px; }
 .qty-wrap{ display:inline-flex; align-items:center; gap:6px; }
 .qty-num{ min-width:26px; text-align:center; }
 
-/* ORDER BUILDER stacked cell */
-.builder-table td{ vertical-align: top; }
-.stack{ display:flex; flex-direction:column; gap:4px; }
-.desc-input{
+/* ORDER BUILDER two-row layout */
+.builder-table .desc-row td{ padding-top:4px; }
+.desc-input.wide{
   width:100%;
   font-size:.95rem;
   padding:8px 10px;
