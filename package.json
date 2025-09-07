@@ -1,4 +1,3 @@
-// FILE: package.json  (replace or merge "scripts" & "engines")
 {
   "name": "scansnap",
   "private": true,
