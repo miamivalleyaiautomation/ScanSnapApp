@@ -111,6 +111,12 @@
 
       <!-- VERIFY -->
       <div v-if="mode==='verify'">
+        <!-- summary moved ABOVE the table -->
+        <div class="verify-summary top">
+          <span class="ok">✔ {{ knownCount }}</span>
+          <span class="bad">✖ {{ unknownCount }}</span>
+        </div>
+
         <table class="table">
           <colgroup>
             <col class="col-barcode" />
@@ -129,10 +135,7 @@
             </tr>
           </tbody>
         </table>
-        <div class="verify-summary">
-          <span class="ok">✔ {{ knownCount }}</span>
-          <span class="bad">✖ {{ unknownCount }}</span>
-        </div>
+
         <div class="row" style="margin-top:10px">
           <button class="btn ghost" @click="exportVerify('csv')">Export CSV</button>
           <button class="btn ghost" @click="exportVerify('xlsx')">Export Excel</button>
@@ -141,7 +144,7 @@
         </div>
       </div>
 
-      <!-- ORDER BUILDER -->
+      <!-- ORDER BUILDER (editable description under barcode, qty+delete right) -->
       <div v-if="mode==='builder'">
         <table class="table">
           <colgroup>
@@ -151,16 +154,15 @@
           <thead><tr><th>Barcode / Description</th><th class="right">QTY</th></tr></thead>
           <tbody>
             <tr v-for="row in builderRows" :key="row.code">
-              <td>
+              <td class="barcode-col">
                 <div class="barcode-text" style="font-weight:700">{{ row.code }}</div>
-                <template v-if="catalog.get(row.code)">
-                  <div style="opacity:.85;font-size:.92em" class="ellipsis">{{ catalog.get(row.code) }}</div>
-                </template>
-                <template v-else>
-                  <input class="input input-compact" :value="row.desc"
-                         @input="setBuilderDesc(row.code, ($event.target as HTMLInputElement).value)"
-                         placeholder="Enter description..." style="width:100%" />
-                </template>
+                <input
+                  class="input input-compact ellipsis"
+                  :value="row.desc || catalog.get(row.code) || ''"
+                  @input="setBuilderDesc(row.code, ($event.target as HTMLInputElement).value)"
+                  placeholder="Enter description..."
+                  style="width:100%; margin-top:2px"
+                />
               </td>
               <td class="qty-cell">
                 <div class="qty-pack">
@@ -245,7 +247,6 @@
         <label class="kbd no-wrap"><input type="checkbox" :checked="matrixOn" @change="toggleMatrix($event)" /> matrix_codes</label>
       </div>
 
-      <!-- New: Clear all trims -->
       <div class="row nowrap" style="margin-bottom:8px">
         <button class="btn warn" @click="clearAllTrims">Clear all trims</button>
       </div>
@@ -400,7 +401,7 @@ function toggleMatrix(e: Event){
 }
 function enableAll(){ formatList.forEach(f => { enabled[f] = true }) }
 function disableAll(){ formatList.forEach(f => { enabled[f] = false }) }
-/* NEW: zero-out all prefix/suffix */
+/* Clear all trims */
 function clearAllTrims(){
   for (const f of formatList){
     trims[f].prefix = 0
@@ -621,7 +622,9 @@ function paintTrack(codes: Detected[], ctx: CanvasRenderingContext2D) {
 /* Commit + exports + controls */
 const knownCount = computed(() => verifyRows.filter(r=>r.ok).length)
 const unknownCount = computed(() => verifyRows.filter(r=>!r.ok).length)
-const builderRows = computed(() => [...builder.entries()].map(([code, v]) => ({ code, qty:v.qty, desc:v.desc || '' })))
+const builderRows = computed(() =>
+  [...builder.entries()].map(([code, v]) => ({ code, qty:v.qty, desc:v.desc || '' }))
+)
 const last = reactive<{code:string|null, qty:number}>({ code:null, qty:0 })
 
 function tapToAdd(){
@@ -645,9 +648,10 @@ function commitCode(code:string){
     }
     setLast(code, 1)
   } else {
-    const entry = builder.get(code) || { qty:0, desc: catalog.get(code) || '' }
+    const entry = builder.get(code) || { qty:0, desc: '' }
+    // auto-copy description if available from catalog (first time)
+    if (!entry.desc && catalog.get(code)) entry.desc = catalog.get(code) as string
     entry.qty += 1
-    if(!entry.desc && catalog.get(code)) entry.desc = catalog.get(code) || ''
     builder.set(code, entry)
     setLast(code, entry.qty)
   }
@@ -709,7 +713,7 @@ function exportVerify(type:'csv'|'xlsx'|'pdf'){
   if(type==='pdf') exportPDF('catalog-verify.pdf', rows, ['Barcode','Status'])
 }
 function exportBuilder(type:'csv'|'xlsx'|'pdf'){
-  const rows = builderRows.value.map(r => [r.code, catalog.get(r.code) || r.desc || '', r.qty])
+  const rows = builderRows.value.map(r => [r.code, r.desc || catalog.get(r.code) || '', r.qty])
   if(type==='csv') exportCSV('order-builder.csv', rows, ['Barcode','Description','QTY'])
   if(type==='xlsx') exportXLSX('order-builder.xlsx', rows, ['Barcode','Description','QTY'])
   if(type==='pdf') exportPDF('order-builder.pdf', rows, ['Barcode','Description','QTY'])
@@ -746,6 +750,10 @@ function playBeep(){
   /* Header height reduced by 25px (96 -> 71) */
   --headerH: 71px;
   --logoH: 36px;
+
+  /* brand/status */
+  --ok: #2e7d32;
+  --bad: #c62828;
 
   /* column widths */
   --qtyCol: 260px;
@@ -817,11 +825,16 @@ function playBeep(){
   text-overflow:ellipsis;
   font-variant-numeric: tabular-nums;
 }
-@media (max-width:420px){ .barcode-text{ font-size:12px; } }
+.ellipsis{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
 .right{ text-align:right; }
 .center{ text-align:center; }
-.ellipsis{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+.ok{ color: var(--ok); font-weight:700; }
+.bad{ color: var(--bad); font-weight:700; }
+
+.verify-summary{ display:flex; gap:10px; margin:6px 0; }
+.verify-summary.top{ margin-top:8px; }
 
 /* QTY column */
 td.qty-cell{ padding-right:6px; }
