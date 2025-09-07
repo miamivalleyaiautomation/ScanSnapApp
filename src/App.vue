@@ -4,9 +4,9 @@
     <!-- Header -->
     <div class="header">
       <div class="logo">
-        <img v-if="isDark" src="/favicon_1024_dark.png" alt="icon">
-        <img v-else src="/favicon_1024_light.png" alt="icon">
-        <img class="word" :src="isDark ? '/text_1024_dark.png' : '/text_1024_light.png'" alt="ScanSnap">
+        <img v-if="isDark" src="/favicon_1024_dark.png" alt="icon" />
+        <img v-else src="/favicon_1024_light.png" alt="icon" />
+        <img class="word" :src="isDark ? '/text_1024_dark.png' : '/text_1024_light.png'" alt="ScanSnap" />
       </div>
       <button class="theme-toggle" @click="toggleTheme">{{ isDark ? 'Light' : 'Dark' }}</button>
     </div>
@@ -20,15 +20,34 @@
 
     <!-- SCAN -->
     <div v-if="tab==='scan'" class="panel">
+      <!-- Start/Stop + Torch (left)  |  Permission (right) -->
+      <div class="row nowrap" style="margin-bottom:8px">
+        <div style="display:flex; gap:8px; flex:1; min-width:0">
+          <button class="btn" style="flex:1" @click="toggleCamera">
+            {{ scanning ? 'Stop Camera' : 'Start Camera' }}
+          </button>
+          <button
+            v-if="torchSupported"
+            class="btn ghost"
+            :aria-pressed="torchOn ? 'true' : 'false'"
+            @click="toggleTorch"
+            :disabled="!scanning"
+            title="Camera Torch"
+          >
+            {{ torchOn ? 'Torch Off' : 'Torch On' }}
+          </button>
+        </div>
+        <button class="btn ghost" style="flex:1" @click="requestPermission">Camera Permission</button>
+      </div>
+
+      <!-- Device dropdown -->
       <div class="row" style="margin-bottom:8px">
-        <button class="btn ghost" @click="requestPermission">Camera Permission</button>
-        <button class="btn" :disabled="scanning" @click="scanning=true">Start Camera</button>
-        <select class="input" v-model="selectedDeviceId" @change="onDeviceChange">
+        <select class="input" v-model="selectedDeviceId" @change="onDeviceChange" style="flex:1">
           <option v-for="d in devices" :key="d.deviceId" :value="d.deviceId">{{ d.label || 'camera' }}</option>
         </select>
       </div>
 
-      <div class="video">
+      <div class="video" ref="videoBox">
         <QrcodeStream
           v-if="scanning"
           :constraints="cameraConstraints"
@@ -59,16 +78,22 @@
       <!-- QUICK LIST -->
       <div v-if="mode==='quick'">
         <table class="table">
-          <thead><tr><th>Barcode</th><th style="width:200px">QTY</th><th style="width:64px"></th></tr></thead>
+          <thead>
+            <tr><th>Barcode</th><th style="width:220px; text-align:right">QTY</th><th style="width:56px"></th></tr>
+          </thead>
           <tbody>
             <tr v-for="(qty, code) in quickList" :key="code">
-              <td>{{ code }}</td>
-              <td>
-                <button class="icon-btn" @click="changeQty('quick', code, -1)">−</button>
-                <span style="margin:0 8px">{{ qty }}</span>
-                <button class="icon-btn" @click="changeQty('quick', code, +1)">＋</button>
+              <td class="ellipsis">{{ code }}</td>
+              <td style="text-align:right">
+                <div style="display:inline-flex; gap:8px; align-items:center">
+                  <button class="icon-btn" @click="changeQty('quick', code, -1)">−</button>
+                  <span style="min-width:24px; text-align:center">{{ qty }}</span>
+                  <button class="icon-btn" @click="changeQty('quick', code, +1)">＋</button>
+                </div>
               </td>
-              <td><button class="icon-btn danger" @click="removeItem('quick', code)">🗑</button></td>
+              <td style="text-align:right">
+                <button class="icon-btn danger" @click="removeItem('quick', code)">🗑</button>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -83,15 +108,19 @@
       <!-- VERIFY -->
       <div v-if="mode==='verify'">
         <table class="table">
-          <thead><tr><th>Barcode</th><th style="width:140px">Status</th><th style="width:64px"></th></tr></thead>
+          <thead>
+            <tr><th>Barcode</th><th style="width:120px; text-align:center">Status</th><th style="width:56px"></th></tr>
+          </thead>
           <tbody>
             <tr v-for="r in verifyRows" :key="r.code">
-              <td>{{ r.code }}</td>
-              <td>
-                <span v-if="r.ok" class="ok">✔ KNOWN</span>
-                <span v-else class="bad">✖ UNKNOWN</span>
+              <td class="ellipsis">{{ r.code }}</td>
+              <td style="text-align:center">
+                <span v-if="r.ok" class="ok" aria-label="Known">✔</span>
+                <span v-else class="bad" aria-label="Unknown">✖</span>
               </td>
-              <td><button class="icon-btn danger" @click="removeVerify(r.code)">🗑</button></td>
+              <td style="text-align:right">
+                <button class="icon-btn danger" @click="removeVerify(r.code)">🗑</button>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -110,19 +139,25 @@
       <!-- ORDER BUILDER -->
       <div v-if="mode==='builder'">
         <table class="table">
-          <thead><tr><th>Item</th><th style="width:200px">QTY</th><th style="width:64px"></th></tr></thead>
-        <tbody>
+          <thead>
+            <tr><th>Barcode / Description</th><th style="width:220px; text-align:right">QTY</th><th style="width:56px"></th></tr>
+          </thead>
+          <tbody>
             <tr v-for="row in builderRows" :key="row.code">
               <td>
-                <div style="font-weight:700">{{ row.code }}</div>
-                <div style="opacity:.8">{{ row.desc || '—' }}</div>
+                <div style="font-weight:700" class="ellipsis">{{ row.code }}</div>
+                <div style="opacity:.85; font-size:.92em" class="ellipsis">{{ row.desc || '—' }}</div>
               </td>
-              <td>
-                <button class="icon-btn" @click="changeQty('builder', row.code, -1)">−</button>
-                <span style="margin:0 8px">{{ row.qty }}</span>
-                <button class="icon-btn" @click="changeQty('builder', row.code, +1)">＋</button>
+              <td style="text-align:right">
+                <div style="display:inline-flex; gap:8px; align-items:center">
+                  <button class="icon-btn" @click="changeQty('builder', row.code, -1)">−</button>
+                  <span style="min-width:24px; text-align:center">{{ row.qty }}</span>
+                  <button class="icon-btn" @click="changeQty('builder', row.code, +1)">＋</button>
+                </div>
               </td>
-              <td><button class="icon-btn danger" @click="removeItem('builder', row.code)">🗑</button></td>
+              <td style="text-align:right">
+                <button class="icon-btn danger" @click="removeItem('builder', row.code)">🗑</button>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -139,9 +174,9 @@
     <div v-else-if="tab==='catalog'" class="panel">
       <h3 style="margin-top:2px">Import Catalog</h3>
       <div class="row">
-        <input class="input" type="file" accept=".csv,.xls,.xlsx" @change="onFile">
-        <input class="input" v-model="searchBarcode" placeholder="Search barcode...">
-        <input class="input" v-model="search" placeholder="Search description or barcode...">
+        <input class="input" type="file" accept=".csv,.xls,.xlsx" @change="onFile" />
+        <input class="input" v-model="searchBarcode" placeholder="Search barcode..." />
+        <input class="input" v-model="search" placeholder="Search description or barcode..." />
         <div class="kbd">{{ catalog.size }} items</div>
         <button class="btn warn" style="margin-left:auto" @click="clearCatalog">Clear Catalog</button>
       </div>
@@ -165,11 +200,10 @@
         <span class="kbd">Duplicates collapsed: {{ importStats.duplicates }}</span>
       </div>
 
-      <!-- Responsive catalog table: Description wraps first, then Barcode on small screens -->
       <table class="table catalog">
         <colgroup>
-          <col style="width: 42%">
-          <col style="width: 58%">
+          <col style="width:42%" />
+          <col style="width:58%" />
         </colgroup>
         <thead>
           <tr>
@@ -190,9 +224,9 @@
     <div v-else class="panel">
       <h3>Checks & Trims</h3>
       <div class="row" style="margin-bottom:10px">
-        <label><input type="checkbox" v-model="validateCD"> Validate EAN/UPC check digit</label>
-        <label><input type="checkbox" v-model="stripCD"> Strip EAN/UPC check digit</label>
-        <label><input type="checkbox" v-model="beep"> Beep on success</label>
+        <label><input type="checkbox" v-model="validateCD" /> Validate EAN/UPC check digit</label>
+        <label><input type="checkbox" v-model="stripCD" /> Strip EAN/UPC check digit</label>
+        <label><input type="checkbox" v-model="beep" /> Beep on success</label>
       </div>
 
       <h3>Scanner Formats</h3>
@@ -201,8 +235,8 @@
         <button class="btn ghost" @click="disableAll">Disable all</button>
       </div>
       <div class="row nowrap" style="margin-bottom:8px">
-        <label class="kbd no-wrap"><input type="checkbox" :checked="linearOn" @change="toggleLinear($event)"> linear_codes</label>
-        <label class="kbd no-wrap"><input type="checkbox" :checked="matrixOn" @change="toggleMatrix($event)"> matrix_codes</label>
+        <label class="kbd no-wrap"><input type="checkbox" :checked="linearOn" @change="toggleLinear($event)" /> linear_codes</label>
+        <label class="kbd no-wrap"><input type="checkbox" :checked="matrixOn" @change="toggleMatrix($event)" /> matrix_codes</label>
       </div>
 
       <table class="table setup">
@@ -217,9 +251,9 @@
         <tbody>
           <tr v-for="f in formatList" :key="f">
             <td class="ellipsis">{{ f }}</td>
-            <td><input class="input input-compact" type="number" min="0" v-model.number="trims[f].prefix"></td>
-            <td><input class="input input-compact" type="number" min="0" v-model.number="trims[f].suffix"></td>
-            <td class="center"><input type="checkbox" v-model="enabled[f]"></td>
+            <td><input class="input input-compact" type="number" min="0" v-model.number="trims[f].prefix" /></td>
+            <td><input class="input input-compact" type="number" min="0" v-model.number="trims[f].suffix" /></td>
+            <td class="center"><input type="checkbox" v-model="enabled[f]" /></td>
           </tr>
         </tbody>
       </table>
@@ -229,7 +263,7 @@
 
 <script setup lang="ts">
 import { QrcodeStream } from 'vue-qrcode-reader'
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch, nextTick } from 'vue'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import { exportCSV, exportXLSX, exportPDF } from './utils/exporters'
@@ -259,19 +293,69 @@ const scanning = ref(false)
 const paused = ref(false)
 const devices = ref<MediaDeviceInfo[]>([])
 const selectedDeviceId = ref<string|undefined>(undefined)
-const cameraConstraints = computed<MediaTrackConstraints>(() =>
-  selectedDeviceId.value ? { deviceId: selectedDeviceId.value } : { facingMode: 'environment' }
-)
+const videoBox = ref<HTMLElement | null>(null)
+
+/* Torch */
+const videoTrack = ref<MediaStreamTrack | null>(null)
+const torchSupported = ref(false)
+const torchOn = ref(false)
+
+const cameraConstraints = computed<MediaTrackConstraints>(() => {
+  return selectedDeviceId.value ? { deviceId: selectedDeviceId.value } : { facingMode: 'environment' }
+})
+
 async function requestPermission(){
-  try{ const s = await navigator.mediaDevices.getUserMedia({ video: true }); s.getTracks().forEach(t=>t.stop()) }catch{}
+  try{
+    const s = await navigator.mediaDevices.getUserMedia({ video: true })
+    s.getTracks().forEach(t=>t.stop())
+  }catch{}
 }
 async function onCameraReady(){
   try{
     const list = await navigator.mediaDevices.enumerateDevices()
     devices.value = list.filter(d=>d.kind==='videoinput')
   }catch{}
+  // Probe torch on the actual track used by QrcodeStream
+  await nextTick()
+  try{
+    const vid = videoBox.value?.querySelector('video') as HTMLVideoElement | null
+    const track = (vid?.srcObject as MediaStream | undefined)?.getVideoTracks?.()[0] || null
+    videoTrack.value = track || null
+    torchSupported.value = !!(track && typeof track.getCapabilities === 'function' && (track.getCapabilities() as any).torch !== undefined)
+  }catch{
+    torchSupported.value = false
+  }
 }
-function onDeviceChange(){ if(scanning.value) { scanning.value=false; setTimeout(()=>scanning.value=true) } }
+function onDeviceChange(){
+  if(scanning.value){
+    // restart stream to switch camera
+    scanning.value = false
+    setTimeout(()=>{ scanning.value = true; torchOn.value = false }, 0)
+  }
+}
+function toggleCamera(){
+  if(scanning.value){
+    scanning.value = false
+    // best-effort torch off when stopping
+    if(videoTrack.value){
+      try{ (videoTrack.value as any).applyConstraints?.({ advanced:[{ torch:false }] }) }catch{}
+    }
+    torchOn.value = false
+  }else{
+    scanning.value = true
+  }
+}
+async function toggleTorch(){
+  if(!videoTrack.value) return
+  const want = !torchOn.value
+  try{
+    await (videoTrack.value as any).applyConstraints?.({ advanced:[{ torch: want }] })
+    torchOn.value = want
+  }catch{
+    // silently ignore if device rejects torch
+    torchOn.value = false
+  }
+}
 
 /* Setup: formats, trims, checks */
 const formatList: Format[] = [...ALL_FORMATS]
@@ -309,7 +393,7 @@ function toggleMatrix(e: Event){
 function enableAll(){ formatList.forEach(f => enabled[f] = true) }
 function disableAll(){ formatList.forEach(f => enabled[f] = false) }
 
-/* Catalog */
+/* ---------- Catalog data ---------- */
 const rawRows = ref<Record<string, unknown>[]>([])
 const catalog = reactive(new Map<string,string>())
 const search = ref('')
@@ -320,7 +404,6 @@ const descCol = ref<string>('')
 
 const importStats = reactive({ total: 0, inserted: 0, blank: 0, duplicates: 0 })
 function normalize(s: string){ return s.toLowerCase().replace(/[\s_\-]+/g,'').trim() }
-
 function guessCols(headers: string[]){
   const H = headers.slice()
   const pri = [
@@ -338,14 +421,12 @@ function guessCols(headers: string[]){
   barcodeCol.value = bGuess
   descCol.value = dGuess
 }
-
 function rebuildCatalogFromSelections(){
   catalog.clear()
   importStats.total = rawRows.value.length
   importStats.inserted = 0
   importStats.blank = 0
   importStats.duplicates = 0
-
   const seen = new Set<string>()
   for(const r of rawRows.value){
     const code = String((r as any)[barcodeCol.value] ?? '').trim()
@@ -357,12 +438,10 @@ function rebuildCatalogFromSelections(){
   importStats.inserted = catalog.size
 }
 watch([barcodeCol, descCol], rebuildCatalogFromSelections)
-
 async function onFile(e: Event){
   const file = (e.target as HTMLInputElement).files?.[0]; if(!file) return
   const ext = file.name.split('.').pop()?.toLowerCase()
   let rows: Record<string, unknown>[] = []
-
   if(ext === 'csv'){
     rows = await new Promise<Record<string, unknown>[]>((res, rej)=>{
       Papa.parse<Record<string, unknown>>(file, {
@@ -383,7 +462,6 @@ async function onFile(e: Event){
       blankrows: false
     })
   }
-
   rawRows.value = rows
   const headers = Object.keys(rows[0] ?? {})
   columns.value = headers
@@ -408,7 +486,6 @@ const filteredCatalog = computed(() => {
   }
   return out
 })
-
 function clearCatalog(){
   rawRows.value = []
   catalog.clear()
