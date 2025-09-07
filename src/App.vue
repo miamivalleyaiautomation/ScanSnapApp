@@ -10,11 +10,11 @@
       <button class="theme-toggle" @click="toggleTheme">{{ isDark ? 'Light' : 'Dark' }}</button>
     </div>
 
-    <!-- Top Tabs -->
+    <!-- FULL-WIDTH TABS -->
     <div class="tabs">
-      <button class="tab" :class="{active:tab==='scan'}" @click="tab='scan'">Scan</button>
-      <button class="tab" :class="{active:tab==='catalog'}" @click="tab='catalog'">Catalog</button>
-      <button class="tab" :class="{active:tab==='setup'}" @click="tab='setup'">Setup</button>
+      <button class="tab" :class="{active:tab==='scan'}" @click="tab='scan'">SCAN</button>
+      <button class="tab" :class="{active:tab==='catalog'}" @click="tab='catalog'">CATALOG</button>
+      <button class="tab" :class="{active:tab==='setup'}" @click="tab='setup'">SETUP</button>
     </div>
 
     <!-- SCAN TAB -->
@@ -25,10 +25,6 @@
         <select class="input" v-model="selectedDeviceId" @change="onDeviceChange">
           <option v-for="d in devices" :key="d.deviceId" :value="d.deviceId">{{ d.label || 'camera' }}</option>
         </select>
-        <div class="counts">
-          <span class="ok">✔ {{ knownCount }}</span>
-          <span class="bad">✖ {{ unknownCount }}</span>
-        </div>
       </div>
 
       <div class="video">
@@ -42,7 +38,7 @@
         />
       </div>
 
-      <!-- Recent scan + Modes -->
+      <!-- Recent scan + Mode chips (stretch + same colors as main tabs) -->
       <div class="mini">
         <span class="kbd">Recent</span>
         <span style="font-weight:700">{{ last.code || '—' }}</span>
@@ -51,17 +47,17 @@
           <span>{{ last.qty }}</span>
           <button class="icon-btn" @click="incLast">＋</button>
         </template>
-        <div class="chips" style="margin-left:auto">
-          <button class="tab" :class="{active:mode==='quick'}" @click="setMode('quick')">Quick List</button>
-          <button class="tab" :class="{active:mode==='verify'}" @click="setMode('verify')">Catalog Verify</button>
-          <button class="tab" :class="{active:mode==='builder'}" @click="setMode('builder')">Order Builder</button>
-        </div>
+      </div>
+      <div class="chips" style="margin-top:6px">
+        <button class="tab" :class="{active:mode==='quick'}" @click="setMode('quick')">QUICK LIST</button>
+        <button class="tab" :class="{active:mode==='verify'}" @click="setMode('verify')">CATALOG VERIFY</button>
+        <button class="tab" :class="{active:mode==='builder'}" @click="setMode('builder')">ORDER BUILDER</button>
       </div>
 
       <!-- QUICK LIST -->
       <div v-if="mode==='quick'">
         <table class="table">
-          <thead><tr><th>Barcode</th><th style="width:160px">QTY</th><th style="width:64px"></th></tr></thead>
+          <thead><tr><th>Barcode</th><th style="width:200px">QTY</th><th style="width:64px"></th></tr></thead>
           <tbody>
             <tr v-for="(qty, code) in quickList" :key="code">
               <td>{{ code }}</td>
@@ -85,15 +81,23 @@
       <!-- VERIFY -->
       <div v-if="mode==='verify'">
         <table class="table">
-          <thead><tr><th>Barcode</th><th style="width:120px">Status</th><th style="width:64px"></th></tr></thead>
+          <thead><tr><th>Barcode</th><th style="width:140px">Status</th><th style="width:64px"></th></tr></thead>
           <tbody>
             <tr v-for="r in verifyRows" :key="r.code">
               <td>{{ r.code }}</td>
-              <td>{{ r.ok ? '✔' : '✖' }}</td>
+              <td>
+                <span v-if="r.ok" class="ok">✔ KNOWN</span>
+                <span v-else class="bad">✖ UNKNOWN</span>
+              </td>
               <td><button class="icon-btn danger" @click="removeVerify(r.code)">🗑</button></td>
             </tr>
           </tbody>
         </table>
+        <!-- ✓ / ✕ only under VERIFY table -->
+        <div class="verify-summary">
+          <span class="ok">✔ {{ knownCount }}</span>
+          <span class="bad">✖ {{ unknownCount }}</span>
+        </div>
         <div class="row" style="margin-top:10px">
           <button class="btn ghost" @click="exportVerify('csv')">Export CSV</button>
           <button class="btn ghost" @click="exportVerify('xlsx')">Export Excel</button>
@@ -105,7 +109,7 @@
       <!-- ORDER BUILDER -->
       <div v-if="mode==='builder'">
         <table class="table">
-          <thead><tr><th>Item</th><th style="width:160px">QTY</th><th style="width:64px"></th></tr></thead>
+          <thead><tr><th>Item</th><th style="width:200px">QTY</th><th style="width:64px"></th></tr></thead>
           <tbody>
             <tr v-for="row in builderRows" :key="row.code">
               <td>
@@ -136,7 +140,7 @@
       <div class="row">
         <input class="input" type="file" accept=".csv,.xls,.xlsx" @change="onFile">
         <input class="input" v-model="search" placeholder="Search code/description...">
-        <div class="kbd"> {{ catalog.size }} items</div>
+        <div class="kbd">{{ catalog.size }} items</div>
       </div>
       <div v-if="columns.length" class="row" style="margin-top:10px">
         <div>Barcode column:</div>
@@ -167,19 +171,23 @@
         <label><input type="checkbox" v-model="stripCD"> Strip EAN/UPC check digit</label>
         <label><input type="checkbox" v-model="beep"> Beep on success</label>
       </div>
-      <h3>Engine</h3>
-      <div class="row">
+
+      <h3>Scanner Formats</h3>
+      <div class="row" style="margin-bottom:8px">
         <button class="btn ghost" @click="enableAll">Enable all</button>
         <button class="btn ghost" @click="disableAll">Disable all</button>
+        <label class="kbd"><input type="checkbox" :checked="linearOn" @change="toggleLinear($event)"> linear_codes</label>
+        <label class="kbd"><input type="checkbox" :checked="matrixOn" @change="toggleMatrix($event)"> matrix_codes</label>
       </div>
+
       <table class="table">
-        <thead><tr><th>Format</th><th>Trim Prefix</th><th>Trim Suffix</th><th>Enabled</th></tr></thead>
+        <thead><tr><th style="width:220px">Format</th><th>Trim Prefix</th><th>Trim Suffix</th><th>Enabled</th></tr></thead>
         <tbody>
-          <tr v-for="s in symList" :key="s">
-            <td>{{ s }}</td>
-            <td><input class="input" style="width:80px" type="number" min="0" v-model.number="trims[s].prefix"></td>
-            <td><input class="input" style="width:80px" type="number" min="0" v-model.number="trims[s].suffix"></td>
-            <td><input type="checkbox" v-model="enabled[s]"></td>
+          <tr v-for="f in formatList" :key="f">
+            <td>{{ f }}</td>
+            <td><input class="input" style="width:90px" type="number" min="0" v-model.number="trims[f].prefix"></td>
+            <td><input class="input" style="width:90px" type="number" min="0" v-model.number="trims[f].suffix"></td>
+            <td><input type="checkbox" v-model="enabled[f]"></td>
           </tr>
         </tbody>
       </table>
@@ -194,8 +202,9 @@ import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import { exportCSV, exportXLSX, exportPDF } from './utils/exporters'
 import {
-  ALL_SYMS, DEFAULT_TRIMS, SYM_TO_VQRR,
-  type Symbology, type TrimRules,
+  ALL_FORMATS, DEFAULT_TRIMS,
+  LINEAR_GROUP, MATRIX_GROUP,
+  type Format, type TrimRules,
   stripCheckDigit, validateCheckDigit, applyTrims
 } from './utils/barcode'
 
@@ -217,9 +226,7 @@ const selectedDeviceId = ref<string|undefined>(undefined)
 const cameraConstraints = computed<MediaTrackConstraints>(() =>
   selectedDeviceId.value ? { deviceId: selectedDeviceId.value } : { facingMode: 'environment' }
 )
-async function requestPermission(){
-  try{ const s = await navigator.mediaDevices.getUserMedia({ video: true }); s.getTracks().forEach(t=>t.stop()) }catch{}
-}
+async function requestPermission(){ try{ const s = await navigator.mediaDevices.getUserMedia({ video: true }); s.getTracks().forEach(t=>t.stop()) }catch{} }
 async function onCameraReady(){
   try{
     const list = await navigator.mediaDevices.enumerateDevices()
@@ -229,9 +236,9 @@ async function onCameraReady(){
 function onDeviceChange(){ if(scanning.value) { scanning.value=false; setTimeout(()=>scanning.value=true) } }
 
 /* Setup: formats, trims, checks */
-const symList: Symbology[] = [...ALL_SYMS]
-const enabled = reactive<Record<Symbology, boolean>>(JSON.parse(localStorage.getItem('enabled')||'{}') || {})
-symList.forEach(s => enabled[s] = enabled[s] ?? true)
+const formatList: Format[] = [...ALL_FORMATS]
+const enabled = reactive<Record<Format, boolean>>(JSON.parse(localStorage.getItem('enabled')||'{}') || {})
+formatList.forEach(f => enabled[f] = enabled[f] ?? (f==='qr_code' || f==='code_128' || f==='ean_13' || f==='upc_a'))
 watch(enabled, () => localStorage.setItem('enabled', JSON.stringify(enabled)), { deep:true })
 
 const trims = reactive<TrimRules>(Object.assign({}, DEFAULT_TRIMS, JSON.parse(localStorage.getItem('trims')||'{}')))
@@ -244,10 +251,21 @@ watch(stripCD, v => localStorage.setItem('stripCD', v?'1':'0'))
 watch(validateCD, v => localStorage.setItem('validateCD', v?'1':'0'))
 watch(beep, v => localStorage.setItem('beep', v?'1':'0'))
 
-const activeFormats = computed(() => symList.filter(s => enabled[s]).map(s => SYM_TO_VQRR[s]))
+const activeFormats = computed(() => formatList.filter(f => enabled[f]))
 
-function enableAll(){ symList.forEach(s => enabled[s] = true) }
-function disableAll(){ symList.forEach(s => enabled[s] = false) }
+/* Group toggles */
+const linearOn = computed(() => LINEAR_GROUP.every(f => enabled[f]))
+const matrixOn = computed(() => MATRIX_GROUP.every(f => enabled[f]))
+function toggleLinear(e: Event){
+  const on = (e.target as HTMLInputElement).checked
+  LINEAR_GROUP.forEach(f => enabled[f] = on)
+}
+function toggleMatrix(e: Event){
+  const on = (e.target as HTMLInputElement).checked
+  MATRIX_GROUP.forEach(f => enabled[f] = on)
+}
+function enableAll(){ formatList.forEach(f => enabled[f] = true) }
+function disableAll(){ formatList.forEach(f => enabled[f] = false) }
 
 /* Catalog data */
 const catalog = reactive(new Map<string,string>())
@@ -261,7 +279,7 @@ const filteredCatalog = computed(() => {
   const rows: {barcode:string, description:string}[] = []
   for (const [code, desc] of catalog) {
     if(!q || code.includes(q) || (desc||'').toLowerCase().includes(q)) rows.push({ barcode: code, description: desc })
-    if(rows.length>400) break
+    if(rows.length>1000) break
   }
   return rows
 })
@@ -309,30 +327,23 @@ const builderRows = computed(() => [...builder.entries()].map(([code, v]) => ({ 
 
 const last = reactive<{code:string|null, qty:number}>({ code:null, qty:0 })
 
-/* Scan handler — only vue-qrcode-reader (<QrcodeStream>) */
+/* Scan handler — uses QrcodeStream only */
 let lastAt = 0
 async function onDetect(payload: any){
   const now = Date.now()
-  if(now - lastAt < 400) return // de-bounce same frame
+  if(now - lastAt < 300) return
   lastAt = now
 
   const first = (payload as any[])[0]
   const raw = String(first.rawValue ?? '').trim()
-  const fmtStr: string = String(first.format ?? '').toLowerCase()
-  const sym: Symbology | null =
-    fmtStr.includes('code_128') ? 'CODE_128' :
-    fmtStr.includes('ean_13') ? 'EAN_13' :
-    fmtStr.includes('ean_8') ? 'EAN_8' :
-    fmtStr.includes('upc_a') ? 'UPC_A' :
-    fmtStr.includes('upc_e') ? 'UPC_E' : null
+  const fmt = String(first.format ?? '').toLowerCase() as Format
 
   let code = raw
-  if(sym){
-    if(validateCD.value && !validateCheckDigit(code, sym)) return
-    code = applyTrims(code, sym, trims)
-    code = stripCheckDigit(code, sym, stripCD.value)
+  if(fmt){
+    if(validateCD.value && !validateCheckDigit(code, fmt)) return
+    code = applyTrims(code, fmt, trims)
+    code = stripCheckDigit(code, fmt, stripCD.value)
   }
-
   if(!code) return
   if(beep.value) playBeep()
 
@@ -353,9 +364,7 @@ async function onDetect(payload: any){
     setLast(code, entry.qty)
   }
 }
-function onError(err:any){
-  console.warn(err)
-}
+function onError(err:any){ console.warn(err) }
 function setLast(code:string, qty:number){ last.code = code; last.qty = qty }
 function incLast(){ if(!last.code) return; if(mode.value==='quick'){ changeQty('quick', last.code, +1) } else { changeQty('builder', last.code, +1) } }
 function decLast(){ if(!last.code) return; if(mode.value==='quick'){ changeQty('quick', last.code, -1) } else { changeQty('builder', last.code, -1) } }
@@ -372,18 +381,9 @@ function changeQty(which:'quick'|'builder', code:string, delta:number){
     if(last.code===code) last.qty = v
   }
 }
-function removeItem(which:'quick'|'builder', code:string){
-  if(which==='quick') quickList.delete(code); else builder.delete(code)
-}
-function removeVerify(code:string){
-  const i = verifyRows.findIndex(r=>r.code===code)
-  if(i>=0) verifyRows.splice(i,1)
-}
-function clearMode(which:'quick'|'verify'|'builder'){
-  if(which==='quick') quickList.clear()
-  if(which==='verify') verifyRows.splice(0)
-  if(which==='builder') builder.clear()
-}
+function removeItem(which:'quick'|'builder', code:string){ if(which==='quick') quickList.delete(code); else builder.delete(code) }
+function removeVerify(code:string){ const i = verifyRows.findIndex(r=>r.code===code); if(i>=0) verifyRows.splice(i,1) }
+function clearMode(which:'quick'|'verify'|'builder'){ if(which==='quick') quickList.clear(); if(which==='verify') verifyRows.splice(0); if(which==='builder') builder.clear() }
 
 /* Exports */
 function exportQuick(type:'csv'|'xlsx'|'pdf'){
