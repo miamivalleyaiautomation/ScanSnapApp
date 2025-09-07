@@ -111,10 +111,9 @@
 
       <!-- VERIFY -->
       <div v-if="mode==='verify'">
-        <!-- summary moved ABOVE the table -->
         <div class="verify-summary top">
-          <span class="ok">✔ {{ knownCount }}</span>
-          <span class="bad">✖ {{ unknownCount }}</span>
+          <span class="count">✔ {{ knownCount }}</span>
+          <span class="count">✖ {{ unknownCount }}</span>
         </div>
 
         <table class="table">
@@ -128,8 +127,8 @@
             <tr v-for="r in verifyRows" :key="r.code">
               <td class="barcode-col"><div class="barcode-text">{{ r.code }}</div></td>
               <td class="center">
-                <span v-if="r.ok" class="ok" aria-label="Known">✔</span>
-                <span v-else class="bad" aria-label="Unknown">✖</span>
+                <span v-if="r.ok" class="status-icon ok-icon" aria-label="Known">✔</span>
+                <span v-else class="status-icon bad-icon" aria-label="Unknown">✖</span>
               </td>
               <td class="right"><button class="icon-btn" @click="removeVerify(r.code)" aria-label="Delete">✖</button></td>
             </tr>
@@ -144,7 +143,7 @@
         </div>
       </div>
 
-      <!-- ORDER BUILDER (editable description under barcode, qty+delete right) -->
+      <!-- ORDER BUILDER -->
       <div v-if="mode==='builder'">
         <table class="table">
           <colgroup>
@@ -401,7 +400,6 @@ function toggleMatrix(e: Event){
 }
 function enableAll(){ formatList.forEach(f => { enabled[f] = true }) }
 function disableAll(){ formatList.forEach(f => { enabled[f] = false }) }
-/* Clear all trims */
 function clearAllTrims(){
   for (const f of formatList){
     trims[f].prefix = 0
@@ -649,7 +647,6 @@ function commitCode(code:string){
     setLast(code, 1)
   } else {
     const entry = builder.get(code) || { qty:0, desc: '' }
-    // auto-copy description if available from catalog (first time)
     if (!entry.desc && catalog.get(code)) entry.desc = catalog.get(code) as string
     entry.qty += 1
     builder.set(code, entry)
@@ -830,11 +827,13 @@ function playBeep(){
 .right{ text-align:right; }
 .center{ text-align:center; }
 
-.ok{ color: var(--ok); font-weight:700; }
-.bad{ color: var(--bad); font-weight:700; }
-
+/* verify: colored icons in table; counts neutral */
+.status-icon { font-weight: 700; }
+.ok-icon { color: var(--ok); }
+.bad-icon { color: var(--bad); }
 .verify-summary{ display:flex; gap:10px; margin:6px 0; }
 .verify-summary.top{ margin-top:8px; }
+.verify-summary .count { color: var(--fg); font-weight: 700; }
 
 /* QTY column */
 td.qty-cell{ padding-right:6px; }
