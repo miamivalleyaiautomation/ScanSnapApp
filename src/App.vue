@@ -2,16 +2,17 @@
 <template>
   <div class="container">
     <!-- Header -->
-    <div class="header" style="position:relative;display:flex;align-items:center;">
-      <div style="display:flex;align-items:center;gap:.5rem">
-        <img v-if="isDark" src="/favicon_1024_dark.png" alt="icon" style="height:28px" />
-        <img v-else src="/favicon_1024_light.png" alt="icon" style="height:28px" />
+    <div class="header">
+      <div class="header-content">
+        <div class="logo">
+          <img v-if="isDark" class="logo-icon" src="/favicon_1024_dark.png" alt="icon" />
+          <img v-else class="logo-icon" src="/favicon_1024_light.png" alt="icon" />
+        </div>
+        <div class="logo-center">
+          <img class="logo-text" :src="isDark ? '/text_1024_dark.png' : '/text_1024_light.png'" alt="ScanSnap" />
+        </div>
+        <button class="theme-toggle" @click="toggleTheme">{{ isDark ? 'Light' : 'Dark' }}</button>
       </div>
-      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
-        <img :src="isDark ? '/text_1024_dark.png' : '/text_1024_light.png'"
-             alt="ScanSnap" style="height:28px;transform:scale(1.15);transform-origin:center" />
-      </div>
-      <button class="theme-toggle" @click="toggleTheme">{{ isDark ? 'Light' : 'Dark' }}</button>
     </div>
 
     <!-- Tabs -->
@@ -94,7 +95,7 @@
                     <span class="qty-num">{{ qty }}</span>
                     <button class="icon-btn" @click="changeQty('quick', code, +1)">＋</button>
                   </div>
-                  <button class="icon-btn delete" @click="removeItem('quick', code)" aria-label="Delete">✖</button>
+                  <button class="icon-btn" @click="removeItem('quick', code)" aria-label="Delete">✖</button>
                 </div>
               </td>
             </tr>
@@ -124,7 +125,7 @@
                 <span v-if="r.ok" class="ok" aria-label="Known">✔</span>
                 <span v-else class="bad" aria-label="Unknown">✖</span>
               </td>
-              <td class="right"><button class="icon-btn delete" @click="removeVerify(r.code)" aria-label="Delete">✖</button></td>
+              <td class="right"><button class="icon-btn" @click="removeVerify(r.code)" aria-label="Delete">✖</button></td>
             </tr>
           </tbody>
         </table>
@@ -168,7 +169,7 @@
                     <span class="qty-num">{{ row.qty }}</span>
                     <button class="icon-btn" @click="changeQty('builder', row.code, +1)">＋</button>
                   </div>
-                  <button class="icon-btn delete" @click="removeItem('builder', row.code)" aria-label="Delete">✖</button>
+                  <button class="icon-btn" @click="removeItem('builder', row.code)" aria-label="Delete">✖</button>
                 </div>
               </td>
             </tr>
@@ -281,7 +282,10 @@ const LS = {
 
 /* Theme */
 const isDark = ref(!(localStorage.getItem(LS.theme) === 'light'))
-watch(isDark, v => { document.documentElement.classList.toggle('light', !v); localStorage.setItem(LS.theme, v ? 'dark' : 'light') })
+watch(isDark, v => {
+  document.documentElement.classList.toggle('light', !v)
+  localStorage.setItem(LS.theme, v ? 'dark' : 'light')
+})
 document.documentElement.classList.toggle('light', !isDark.value)
 function toggleTheme(){ isDark.value = !isDark.value }
 
@@ -305,7 +309,10 @@ const cameraConstraints = computed<MediaTrackConstraints>(
   () => selectedDeviceId.value ? { deviceId: selectedDeviceId.value } : { facingMode: 'environment' }
 )
 async function requestPermission(){
-  try{ const s = await navigator.mediaDevices.getUserMedia({ video: true }); s.getTracks().forEach(t=>t.stop()) }catch{}
+  try{
+    const s = await navigator.mediaDevices.getUserMedia({ video: true })
+    s.getTracks().forEach(t=>t.stop())
+  }catch{}
 }
 async function onCameraReady(){
   try{
@@ -318,13 +325,25 @@ async function onCameraReady(){
     const track = (vid?.srcObject as MediaStream | undefined)?.getVideoTracks?.()[0] || null
     videoTrack.value = track || null
     torchSupported.value = !!(track && typeof track.getCapabilities === 'function' && (track.getCapabilities as any)().torch !== undefined)
-  }catch{ torchSupported.value = false }
+  }catch{
+    torchSupported.value = false
+  }
 }
-function onDeviceChange(){ if(scanning.value){ scanning.value=false; setTimeout(()=>{ scanning.value=true; torchOn.value=false }, 0) } }
+function onDeviceChange(){
+  if(scanning.value){
+    scanning.value=false
+    setTimeout(()=>{
+      scanning.value=true
+      torchOn.value=false
+    }, 0)
+  }
+}
 function toggleCamera(){
   if(scanning.value){
     scanning.value=false
-    if(videoTrack.value){ try{ (videoTrack.value as any).applyConstraints?.({ advanced:[{ torch:false }] }) }catch{} }
+    if(videoTrack.value){
+      try{ (videoTrack.value as any).applyConstraints?.({ advanced:[{ torch:false }] }) }catch{}
+    }
     torchOn.value=false
     clearPreview()
   }else{
@@ -334,13 +353,20 @@ function toggleCamera(){
 async function toggleTorch(){
   if(!videoTrack.value) return
   const want = !torchOn.value
-  try{ await (videoTrack.value as any).applyConstraints?.({ advanced:[{ torch: want }] }); torchOn.value = want }catch{ torchOn.value = false }
+  try{
+    await (videoTrack.value as any).applyConstraints?.({ advanced:[{ torch: want }] })
+    torchOn.value = want
+  }catch{
+    torchOn.value = false
+  }
 }
 
 /* Setup */
 const formatList: Format[] = [...ALL_FORMATS]
 const enabled = reactive<Record<Format, boolean>>(JSON.parse(localStorage.getItem(LS.enabled)||'{}') || {})
-formatList.forEach(f => { if (enabled[f] === undefined) enabled[f] = (f==='qr_code' || f==='code_128' || f==='ean_13' || f==='upc_a') })
+formatList.forEach(f => {
+  if (enabled[f] === undefined) enabled[f] = (f==='qr_code' || f==='code_128' || f==='ean_13' || f==='upc_a')
+})
 watch(enabled, () => localStorage.setItem(LS.enabled, JSON.stringify(enabled)), { deep:true })
 
 const trims = reactive<TrimRules>(Object.assign({}, DEFAULT_TRIMS, JSON.parse(localStorage.getItem(LS.trims)||'{}')))
@@ -359,8 +385,14 @@ const activeFormats = computed(() => {
 })
 const linearOn = computed(() => LINEAR_GROUP.every(f => enabled[f]))
 const matrixOn = computed(() => MATRIX_GROUP.every(f => enabled[f]))
-function toggleLinear(e: Event){ const on = (e.target as HTMLInputElement).checked; LINEAR_GROUP.forEach(f => { enabled[f] = on }) }
-function toggleMatrix(e: Event){ const on = (e.target as HTMLInputElement).checked; MATRIX_GROUP.forEach(f => { enabled[f] = on }) }
+function toggleLinear(e: Event){
+  const on = (e.target as HTMLInputElement).checked
+  LINEAR_GROUP.forEach(f => { enabled[f] = on })
+}
+function toggleMatrix(e: Event){
+  const on = (e.target as HTMLInputElement).checked
+  MATRIX_GROUP.forEach(f => { enabled[f] = on })
+}
 function enableAll(){ formatList.forEach(f => { enabled[f] = true }) }
 function disableAll(){ formatList.forEach(f => { enabled[f] = false }) }
 
@@ -370,8 +402,10 @@ const rawRows = ref<Record<string, unknown>[]>([])
 const columns = ref<string[]>([])
 const barcodeCol = ref<string>(localStorage.getItem(LS.barcodeCol) || '')
 const descCol = ref<string>(localStorage.getItem(LS.descCol) || '')
-const search = ref(''); const searchBarcode = ref('')
+const search = ref('')
+const searchBarcode = ref('')
 const importStats = reactive({ total:0, inserted:0, blank:0, duplicates:0 })
+
 watch(barcodeCol, v => localStorage.setItem(LS.barcodeCol, v))
 watch(descCol, v => localStorage.setItem(LS.descCol, v))
 const catalogEntries = computed<[string,string][]>(() => Array.from(catalog.entries()))
@@ -391,7 +425,12 @@ function guessCols(headers:string[]){
   descCol.value = H.find(h => /(description|desc|name|title)/i.test(h)) || ''
 }
 function rebuildCatalogFromSelections(){
-  catalog.clear(); importStats.total = rawRows.value.length; importStats.inserted = 0; importStats.blank = 0; importStats.duplicates = 0
+  catalog.clear()
+  importStats.total = rawRows.value.length
+  importStats.inserted = 0
+  importStats.blank = 0
+  importStats.duplicates = 0
+
   const seen = new Set<string>()
   for (const r of rawRows.value){
     const code = String((r as any)[barcodeCol.value] ?? '').trim()
@@ -405,12 +444,16 @@ function rebuildCatalogFromSelections(){
 watch([barcodeCol, descCol], rebuildCatalogFromSelections)
 
 async function onFile(e:Event){
-  const file = (e.target as HTMLInputElement).files?.[0]; if(!file) return
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if(!file) return
   const ext = file.name.split('.').pop()?.toLowerCase()
   let rows: Record<string, unknown>[] = []
   if(ext === 'csv'){
     rows = await new Promise<Record<string, unknown>[]>((res, rej)=>{
-      Papa.parse<Record<string, unknown>>(file, { header:true, skipEmptyLines:'greedy', dynamicTyping:false, complete: r => res(r.data as Record<string, unknown>[]), error: rej })
+      Papa.parse<Record<string, unknown>>(file, {
+        header:true, skipEmptyLines:'greedy', dynamicTyping:false,
+        complete: r => res(r.data as Record<string, unknown>[]), error: rej
+      })
     })
   } else {
     const data = await file.arrayBuffer()
@@ -418,20 +461,36 @@ async function onFile(e:Event){
     const ws = wb.Sheets[wb.SheetNames[0]]
     rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { raw:false, defval:'', blankrows:false })
   }
-  rawRows.value = rows; const headers = Object.keys(rows[0] ?? {}); columns.value = headers; guessCols(headers); rebuildCatalogFromSelections()
+  rawRows.value = rows
+  const headers = Object.keys(rows[0] ?? {})
+  columns.value = headers
+  guessCols(headers)
+  rebuildCatalogFromSelections()
 }
 const filteredCatalog = computed(() => {
-  const qCode = searchBarcode.value.trim(); const qAny = search.value.trim().toLowerCase()
+  const qCode = searchBarcode.value.trim()
+  const qAny = search.value.trim().toLowerCase()
   const out: {barcode:string, description:string}[] = []
   for (const [code, desc] of catalog){
-    if (qCode){ if (code.includes(qCode)) out.push({ barcode: code, description: desc }) }
-    else if (qAny){ if (code.toLowerCase().includes(qAny) || (desc||'').toLowerCase().includes(qAny)) out.push({ barcode: code, description: desc }) }
-    else out.push({ barcode: code, description: desc })
+    if (qCode){
+      if (code.includes(qCode)) out.push({ barcode: code, description: desc })
+    } else if (qAny){
+      if (code.toLowerCase().includes(qAny) || (desc||'').toLowerCase().includes(qAny))
+        out.push({ barcode: code, description: desc })
+    } else {
+      out.push({ barcode: code, description: desc })
+    }
   }
   return out
 })
 function clearCatalog(){
-  rawRows.value = []; catalog.clear(); columns.value = []; barcodeCol.value = ''; descCol.value = ''; search.value = ''; searchBarcode.value = ''
+  rawRows.value = []
+  catalog.clear()
+  columns.value = []
+  barcodeCol.value = ''
+  descCol.value = ''
+  search.value = ''
+  searchBarcode.value = ''
   importStats.total = importStats.inserted = importStats.blank = importStats.duplicates = 0
   localStorage.removeItem(LS.catalog)
 }
@@ -465,7 +524,10 @@ let guardId: number | undefined
 function startGuard(){
   stopGuard()
   guardId = window.setInterval(() => {
-    if(!scanning.value) { clearPreview(); return }
+    if(!scanning.value) {
+      clearPreview()
+      return
+    }
     const now = performance.now()
     if ((now - lastTrackAt) > 600 || (now - lastCodeAt) > 350) clearPreview()
   }, 150)
@@ -474,7 +536,8 @@ function stopGuard(){ if(guardId){ clearInterval(guardId); guardId = undefined }
 function clearPreview(){ live.raw = null; live.fmt = undefined }
 
 const previewCode = computed<string>(() => {
-  const raw = live.raw?.trim(); if(!raw) return ''
+  const raw = live.raw?.trim()
+  if(!raw) return ''
   let code = raw
   const f = live.fmt
   if(f){
@@ -507,7 +570,8 @@ function paintTrack(codes: Detected[], ctx: CanvasRenderingContext2D) {
     ctx.fillStyle = bg
     ctx.font = '600 14px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
     for (const c of codes) {
-      const bb = c?.boundingBox; if (!bb) continue
+      const bb = c?.boundingBox
+      if (!bb) continue
       const area = Math.max(0, bb.width) * Math.max(0, bb.height)
       ctx.strokeRect(bb.x, bb.y, bb.width, bb.height)
 
@@ -517,10 +581,13 @@ function paintTrack(codes: Detected[], ctx: CanvasRenderingContext2D) {
           bestText = String(c.rawValue).trim() || null
           bestFmt = (String(c.format||'').toLowerCase() || undefined) as Format | undefined
         }
-        const text = String(c.rawValue), pad = 4
+        const text = String(c.rawValue)
+        const pad = 4
         const m = ctx.measureText(text)
-        const tw = m.width + pad * 2, th = 18 + pad * 2
-        const tx = Math.max(2, bb.x), ty = Math.max(th + 2, bb.y)
+        const tw = m.width + pad * 2
+        const th = 18 + pad * 2
+        const tx = Math.max(2, bb.x)
+        const ty = Math.max(th + 2, bb.y)
         ctx.fillRect(tx, ty - th, tw, th)
         ctx.fillStyle = fg
         ctx.fillText(text, tx + pad, ty - 6)
@@ -531,7 +598,10 @@ function paintTrack(codes: Detected[], ctx: CanvasRenderingContext2D) {
   }
 
   if (bestText) {
-    if (live.raw !== bestText) { live.raw = bestText; live.fmt = bestFmt }
+    if (live.raw !== bestText) {
+      live.raw = bestText
+      live.fmt = bestFmt
+    }
     lastCodeAt = lastTrackAt
   }
 }
@@ -542,16 +612,25 @@ const unknownCount = computed(() => verifyRows.filter(r=>!r.ok).length)
 const builderRows = computed(() => [...builder.entries()].map(([code, v]) => ({ code, qty:v.qty, desc:v.desc || '' })))
 const last = reactive<{code:string|null, qty:number}>({ code:null, qty:0 })
 
-function tapToAdd(){ const code = previewCode.value; if(!code) return; commitCode(code); showToast(`✔ Added ${code}`) }
+function tapToAdd(){
+  const code = previewCode.value
+  if(!code) return
+  commitCode(code)
+  showToast(`✔ Added ${code}`)
+}
 function commitCode(code:string){
   if(beep.value) playBeep()
   if(mode.value==='quick'){
     quickList.set(code, (quickList.get(code) || 0) + 1)
-    setLast(code, quickList.get(code)!)
+    setLast(code, quickList.get(code) as number)
   } else if(mode.value==='verify'){
     const ok = catalog.has(code)
     const i = verifyRows.findIndex(r => r.code === code)
-    if (i >= 0) { verifyRows[i] = { code, ok } } else { verifyRows.push({ code, ok }) }
+    if (i >= 0) {
+      verifyRows[i] = { code, ok }
+    } else {
+      verifyRows.push({ code, ok })
+    }
     setLast(code, 1)
   } else {
     const entry = builder.get(code) || { qty:0, desc: catalog.get(code) || '' }
@@ -561,25 +640,43 @@ function commitCode(code:string){
     setLast(code, entry.qty)
   }
 }
-function setBuilderDesc(code:string, desc:string){ const cur = builder.get(code) || { qty:0, desc:'' }; builder.set(code, { ...cur, desc }) }
+function setBuilderDesc(code:string, desc:string){
+  const cur = builder.get(code) || { qty:0, desc:'' }
+  builder.set(code, { ...cur, desc })
+}
 function onError(err:any){ console.warn(err) }
 function setLast(code:string, qty:number){ last.code = code; last.qty = qty }
-function incLast(){ if(!last.code) return; if(mode.value==='quick'){ changeQty('quick', last.code, +1) } else { changeQty('builder', last.code, +1) } }
-function decLast(){ if(!last.code) return; if(mode.value==='quick'){ changeQty('quick', last.code, -1) } else { changeQty('builder', last.code, -1) } }
+function incLast(){
+  if(!last.code) return
+  if(mode.value==='quick'){ changeQty('quick', last.code, +1) } else { changeQty('builder', last.code, +1) }
+}
+function decLast(){
+  if(!last.code) return
+  if(mode.value==='quick'){ changeQty('quick', last.code, -1) } else { changeQty('builder', last.code, -1) }
+}
 function changeQty(which:'quick'|'builder', code:string, delta:number){
   if(which==='quick'){
     const v = Math.max(0, (quickList.get(code)||0) + delta)
-    if(v===0) quickList.delete(code); else quickList.set(code, v)
+    if(v===0) quickList.delete(code)
+    else quickList.set(code, v)
     if(last.code===code) last.qty = v
   } else {
-    const cur = builder.get(code); if(!cur) return
+    const cur = builder.get(code)
+    if(!cur) return
     const v = Math.max(0, cur.qty + delta)
-    if(v===0) builder.delete(code); else builder.set(code, {...cur, qty:v})
+    if(v===0) builder.delete(code)
+    else builder.set(code, {...cur, qty:v})
     if(last.code===code) last.qty = v
   }
 }
-function removeItem(which:'quick'|'builder', code:string){ if(which==='quick') quickList.delete(code); else builder.delete(code) }
-function removeVerify(code:string){ const i = verifyRows.findIndex(r=>r.code===code); if(i>=0) verifyRows.splice(i,1) }
+function removeItem(which:'quick'|'builder', code:string){
+  if(which==='quick') quickList.delete(code)
+  else builder.delete(code)
+}
+function removeVerify(code:string){
+  const i = verifyRows.findIndex(r=>r.code===code)
+  if(i>=0) verifyRows.splice(i,1)
+}
 function clearMode(which:'quick'|'verify'|'builder'){
   if(which==='quick') quickList.clear()
   if(which==='verify') verifyRows.splice(0)
@@ -616,10 +713,14 @@ function showToast(text:string, ms=900){
   toastTimer = setTimeout(() => { toast.show = false }, ms) as any
 }
 function playBeep(){
-  const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
-  const o = ctx.createOscillator(); const g = ctx.createGain()
+  const Ctx = (window.AudioContext || (window as any).webkitAudioContext) as any
+  const ctx = new Ctx()
+  const o = ctx.createOscillator()
+  const g = ctx.createGain()
   o.connect(g); g.connect(ctx.destination)
-  o.frequency.value = 880; g.gain.value = 0.1; o.start(); setTimeout(()=>{ o.stop(); ctx.close() }, 120)
+  o.frequency.value = 880; g.gain.value = 0.1
+  o.start()
+  setTimeout(()=>{ o.stop(); ctx.close() }, 120)
 }
 </script>
 
@@ -627,13 +728,15 @@ function playBeep(){
 :root{
   --overlayBg: rgba(0,0,0,.65);
   --overlayFg: #fff;
-
-  /* fallback theme tokens used below if globals missing */
   --fg: #e8e8e8;
   --edge: rgba(255,255,255,.14);
 
+  /* Header (+50px, ~30% bigger) */
+  --headerH: 96px;
+  --logoH: 36px;
+
   /* column widths */
-  --qtyCol: 260px;         /* room for - # + and delete */
+  --qtyCol: 260px;      /* room for [- # +  ✖] */
   --statusCol: 96px;
   --delCol: 56px;
 }
@@ -647,6 +750,30 @@ function playBeep(){
   :root{ --qtyCol: 220px; --statusCol: 84px; }
 }
 
+/* Header */
+.header{
+  height: var(--headerH);
+  display:flex;
+  align-items:center;           /* vertical center */
+  border-bottom: 1px solid var(--edge); /* subtle divider */
+}
+.header-content{
+  position:relative;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  width:100%;
+}
+.logo{ display:flex; align-items:center; gap:.5rem; }
+.logo-icon{ height: var(--logoH); }
+.logo-center{
+  position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  pointer-events:none;
+}
+.logo-text{ height: var(--logoH); transform: scale(1.15); transform-origin:center; }
+
+/* Camera */
 .video{ position: relative; }
 :deep(canvas){ position:absolute; inset:0; z-index:3; }
 :deep(video){ position:relative; z-index:1; }
@@ -676,11 +803,11 @@ function playBeep(){
 .center{ text-align:center; }
 .ellipsis{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
-/* QTY cell: align cluster to the right, keep delete inside the same column */
+/* QTY column: right-aligned cluster with delete looking like +/- */
 td.qty-cell{ padding-right:6px; }
 .qty-pack{
   display:flex;
-  justify-content:flex-end;  /* push content to the far right */
+  justify-content:flex-end;  /* push content to far right */
   align-items:center;
   gap:10px;                  /* space between qty-wrap and delete */
 }
@@ -691,19 +818,7 @@ td.qty-cell{ padding-right:6px; }
 }
 .qty-num{ min-width:26px; text-align:center; }
 
-/* Delete button: neutral by default, brand only while pressed */
-.icon-btn.delete{
-  background: transparent;
-  color: inherit;
-  border-color: var(--edge);
-}
-.icon-btn.delete:hover{ filter: brightness(1.06); }
-.icon-btn.delete:active{
-  background: var(--brand);
-  color:#fff;
-  border-color: var(--brand);
-}
-
+/* Toast */
 .toast{
   position:absolute;
   left:50%; bottom:10px; transform:translateX(-50%);
