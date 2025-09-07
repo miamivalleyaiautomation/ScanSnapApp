@@ -34,8 +34,8 @@
           :constraints="cameraConstraints"
           :formats="activeFormats"
           @camera-on="onCameraReady"
-          @decode="onDecode"        <!-- ← always fires with text -->
-          @detect="onDetect"        <!-- ← structured payload when available -->
+          @decode="onDecode"
+          @detect="onDetect"
           @error="onError"
         />
       </div>
@@ -84,7 +84,7 @@
       <div v-if="mode==='verify'">
         <table class="table">
           <thead><tr><th>Barcode</th><th style="width:140px">Status</th><th style="width:64px"></th></tr></thead>
-        <tbody>
+          <tbody>
             <tr v-for="r in verifyRows" :key="r.code">
               <td>{{ r.code }}</td>
               <td>
