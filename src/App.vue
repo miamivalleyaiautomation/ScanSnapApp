@@ -61,7 +61,7 @@
         />
       </div>
 
-      <!-- Tap-to-add (enabled whenever we have a valid preview code) -->
+      <!-- Tap-to-add: disabled when preview cleared (>1s no code or camera off) -->
       <div class="row" style="margin-top:8px">
         <button class="btn" style="flex:1" :disabled="!canTap" @click="tapToAdd">
           {{ tapLabel }}
@@ -87,18 +87,23 @@
       <!-- QUICK LIST -->
       <div v-if="mode==='quick'">
         <table class="table">
-          <thead><tr><th>Barcode</th><th style="width:220px;text-align:right">QTY</th><th style="width:56px"></th></tr></thead>
+          <colgroup>
+            <col />                             <!-- barcode flex -->
+            <col style="width:220px" />         <!-- QTY fixed -->
+            <col style="width:56px" />          <!-- delete -->
+          </colgroup>
+          <thead><tr><th>Barcode</th><th class="right">QTY</th><th></th></tr></thead>
           <tbody>
             <tr v-for="([code, qty]) in quickEntries" :key="code">
               <td class="ellipsis">{{ code }}</td>
-              <td style="text-align:right">
+              <td class="right">
                 <div style="display:inline-flex;gap:8px;align-items:center">
                   <button class="icon-btn" @click="changeQty('quick', code, -1)">−</button>
                   <span style="min-width:24px;text-align:center">{{ qty }}</span>
                   <button class="icon-btn" @click="changeQty('quick', code, +1)">＋</button>
                 </div>
               </td>
-              <td style="text-align:right"><button class="icon-btn danger" @click="removeItem('quick', code)">🗑</button></td>
+              <td class="right"><button class="icon-btn danger" @click="removeItem('quick', code)">🗑</button></td>
             </tr>
           </tbody>
         </table>
@@ -113,15 +118,20 @@
       <!-- VERIFY -->
       <div v-if="mode==='verify'">
         <table class="table">
-          <thead><tr><th>Barcode</th><th style="width:120px;text-align:center">Status</th><th style="width:56px"></th></tr></thead>
+          <colgroup>
+            <col />                             <!-- barcode flex -->
+            <col style="width:120px" />         <!-- status fixed -->
+            <col style="width:56px" />          <!-- delete -->
+          </colgroup>
+          <thead><tr><th>Barcode</th><th class="center">Status</th><th></th></tr></thead>
           <tbody>
             <tr v-for="r in verifyRows" :key="r.code">
               <td class="ellipsis">{{ r.code }}</td>
-              <td style="text-align:center">
+              <td class="center">
                 <span v-if="r.ok" class="ok" aria-label="Known">✔</span>
                 <span v-else class="bad" aria-label="Unknown">✖</span>
               </td>
-              <td style="text-align:right"><button class="icon-btn danger" @click="removeVerify(r.code)">🗑</button></td>
+              <td class="right"><button class="icon-btn danger" @click="removeVerify(r.code)">🗑</button></td>
             </tr>
           </tbody>
         </table>
@@ -140,21 +150,38 @@
       <!-- ORDER BUILDER -->
       <div v-if="mode==='builder'">
         <table class="table">
-          <thead><tr><th>Barcode / Description</th><th style="width:220px;text-align:right">QTY</th><th style="width:56px"></th></tr></thead>
+          <colgroup>
+            <col />                             <!-- barcode/desc flex -->
+            <col style="width:220px" />         <!-- QTY fixed -->
+            <col style="width:56px" />          <!-- delete -->
+          </colgroup>
+          <thead><tr><th>Barcode / Description</th><th class="right">QTY</th><th></th></tr></thead>
           <tbody>
             <tr v-for="row in builderRows" :key="row.code">
               <td>
                 <div style="font-weight:700" class="ellipsis">{{ row.code }}</div>
-                <div style="opacity:.85;font-size:.92em" class="ellipsis">{{ row.desc || '—' }}</div>
+                <!-- Show catalog description if exists; otherwise allow manual entry -->
+                <template v-if="catalog.get(row.code)">
+                  <div style="opacity:.85;font-size:.92em" class="ellipsis">{{ catalog.get(row.code) }}</div>
+                </template>
+                <template v-else>
+                  <input
+                    class="input input-compact"
+                    :value="row.desc"
+                    @input="setBuilderDesc(row.code, ($event.target as HTMLInputElement).value)"
+                    placeholder="Enter description..."
+                    style="width:100%"
+                  />
+                </template>
               </td>
-              <td style="text-align:right">
+              <td class="right">
                 <div style="display:inline-flex;gap:8px;align-items:center">
                   <button class="icon-btn" @click="changeQty('builder', row.code, -1)">−</button>
                   <span style="min-width:24px;text-align:center">{{ row.qty }}</span>
                   <button class="icon-btn" @click="changeQty('builder', row.code, +1)">＋</button>
                 </div>
               </td>
-              <td style="text-align:right"><button class="icon-btn danger" @click="removeItem('builder', row.code)">🗑</button></td>
+              <td class="right"><button class="icon-btn danger" @click="removeItem('builder', row.code)">🗑</button></td>
             </tr>
           </tbody>
         </table>
@@ -298,7 +325,7 @@ async function onCameraReady(){
     const vid = videoBox.value?.querySelector('video') as HTMLVideoElement | null
     const track = (vid?.srcObject as MediaStream | undefined)?.getVideoTracks?.()[0] || null
     videoTrack.value = track || null
-    torchSupported.value = !!(track && typeof track.getCapabilities === 'function' && (track.getCapabilities() as any).torch !== undefined)
+    torchSupported.value = !!(track && typeof track.getCapabilities === 'function' && (track.getCapabilities)().torch !== undefined)
   }catch{ torchSupported.value = false }
 }
 function onDeviceChange(){ if(scanning.value){ scanning.value=false; setTimeout(()=>{ scanning.value=true; torchOn.value=false }, 0) } }
@@ -307,7 +334,7 @@ function toggleCamera(){
     scanning.value=false
     if(videoTrack.value){ try{ (videoTrack.value as any).applyConstraints?.({ advanced:[{ torch:false }] }) }catch{} }
     torchOn.value=false
-    live.raw = null; live.fmt = undefined
+    clearPreview()                                  /* clear when camera stops */
   }else{
     scanning.value=true
   }
@@ -420,10 +447,19 @@ onMounted(() => {
   try{ const C = JSON.parse(localStorage.getItem(LS.catalog)||'[]') as [string,string][]; catalog.clear(); for(const [c,d] of C) catalog.set(c,d) }catch{}
 })
 
-/* Live detection (no short timeout gating) */
+/* Live detection + preview clearing */
 type DetectedEvt = { rawValue?: string; format?: string }
 const live = reactive<{ raw: string | null; fmt?: Format }>({ raw: null, fmt: undefined })
+let clearTimer: number | undefined
 
+function scheduleClear(ms=1000){
+  if(clearTimer) clearTimeout(clearTimer as any)
+  clearTimer = setTimeout(() => { clearPreview() }, ms) as any
+}
+function clearPreview(){
+  live.raw = null
+  live.fmt = undefined
+}
 const previewCode = computed<string>(() => {
   const raw = live.raw?.trim()
   if(!raw) return ''
@@ -436,7 +472,6 @@ const previewCode = computed<string>(() => {
   }
   return code
 })
-/* enable Tap when we have a valid, trimmed preview */
 const canTap = computed(() => !!previewCode.value)
 const tapLabel = computed(() => previewCode.value ? `Tap to add ${previewCode.value}` : 'Tap to add')
 
@@ -446,18 +481,22 @@ function onDetect(payload:any){
   const fmt  = String(first?.format ?? '').toLowerCase() as Format | undefined
   live.raw = text || null
   live.fmt = fmt
+  scheduleClear(1000)                              /* clear if no new detection in 1s */
 }
 function tapToAdd(){
   const code = previewCode.value
   if(!code) return
   commitCode(code)
   showToast(`✔ Added ${code}`)
+  scheduleClear(800)                                /* clear quickly after manual add */
 }
 
 /* Commit logic */
 const knownCount = computed(() => verifyRows.filter(r=>r.ok).length)
 const unknownCount = computed(() => verifyRows.filter(r=>!r.ok).length)
-const builderRows = computed(() => [...builder.entries()].map(([code, v]) => ({ code, qty:v.qty, desc:v.desc || catalog.get(code) || '' })))
+const builderRows = computed(() =>
+  [...builder.entries()].map(([code, v]) => ({ code, qty:v.qty, desc:v.desc || '' }))
+)
 const last = reactive<{code:string|null, qty:number}>({ code:null, qty:0 })
 
 function commitCode(code:string){
@@ -468,17 +507,21 @@ function commitCode(code:string){
     quickList.set(code, (quickList.get(code) || 0) + 1)
     setLast(code, quickList.get(code)!)
   } else if(mode.value==='verify'){
-    const ok = catalog.has(code)
+    const ok = catalog.has(code)                     /* unknown if catalog empty */
     const i = verifyRows.findIndex(r => r.code === code)
     if (i >= 0) { verifyRows[i] = { code, ok } } else { verifyRows.push({ code, ok }) }
     setLast(code, 1)
   } else {
-    const entry = builder.get(code) || { qty:0, desc: catalog.get(code) }
+    const entry = builder.get(code) || { qty:0, desc: catalog.get(code) || '' }
     entry.qty += 1
-    if(!entry.desc){ entry.desc = catalog.get(code) }
+    if(!entry.desc && catalog.get(code)) entry.desc = catalog.get(code) || ''
     builder.set(code, entry)
     setLast(code, entry.qty)
   }
+}
+function setBuilderDesc(code:string, desc:string){
+  const cur = builder.get(code) || { qty:0, desc:'' }
+  builder.set(code, { ...cur, desc })
 }
 function onError(err:any){ console.warn(err) }
 function setLast(code:string, qty:number){ last.code = code; last.qty = qty }
@@ -500,7 +543,7 @@ function removeItem(which:'quick'|'builder', code:string){ if(which==='quick') q
 function removeVerify(code:string){ const i = verifyRows.findIndex(r=>r.code===code); if(i>=0) verifyRows.splice(i,1) }
 function clearMode(which:'quick'|'verify'|'builder'){ if(which==='quick') quickList.clear(); if(which==='verify') verifyRows.splice(0); if(which==='builder') builder.clear() }
 
-/* Painter: bbox + text each frame (from QrcodeStream docs) */
+/* Painter: bbox + text each frame */
 type Detected = { boundingBox?: {x:number;y:number;width:number;height:number}; rawValue?: string }
 function paintTrack(codes: Detected[], ctx: CanvasRenderingContext2D) {
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
@@ -574,4 +617,5 @@ function playBeep(){
 
 .ellipsis{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .center{ text-align:center; }
+.right{ text-align:right; }
 </style>
