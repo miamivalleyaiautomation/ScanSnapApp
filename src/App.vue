@@ -82,7 +82,8 @@
             <tr><th>Barcode</th><th style="width:220px; text-align:right">QTY</th><th style="width:56px"></th></tr>
           </thead>
           <tbody>
-            <tr v-for="(qty, code) in quickList" :key="code">
+            <!-- ✅ iterate over [code, qty] tuples -->
+            <tr v-for="([code, qty]) in quickEntries" :key="code">
               <td class="ellipsis">{{ code }}</td>
               <td style="text-align:right">
                 <div style="display:inline-flex; gap:8px; align-items:center">
@@ -315,7 +316,6 @@ async function onCameraReady(){
     const list = await navigator.mediaDevices.enumerateDevices()
     devices.value = list.filter(d=>d.kind==='videoinput')
   }catch{}
-  // Probe torch on the actual track used by QrcodeStream
   await nextTick()
   try{
     const vid = videoBox.value?.querySelector('video') as HTMLVideoElement | null
@@ -328,7 +328,6 @@ async function onCameraReady(){
 }
 function onDeviceChange(){
   if(scanning.value){
-    // restart stream to switch camera
     scanning.value = false
     setTimeout(()=>{ scanning.value = true; torchOn.value = false }, 0)
   }
@@ -336,7 +335,6 @@ function onDeviceChange(){
 function toggleCamera(){
   if(scanning.value){
     scanning.value = false
-    // best-effort torch off when stopping
     if(videoTrack.value){
       try{ (videoTrack.value as any).applyConstraints?.({ advanced:[{ torch:false }] }) }catch{}
     }
@@ -352,7 +350,6 @@ async function toggleTorch(){
     await (videoTrack.value as any).applyConstraints?.({ advanced:[{ torch: want }] })
     torchOn.value = want
   }catch{
-    // silently ignore if device rejects torch
     torchOn.value = false
   }
 }
@@ -502,6 +499,9 @@ function clearCatalog(){
 
 /* Scan flow */
 const quickList = reactive(new Map<string, number>())
+/* ✅ expose entries for proper iteration */
+const quickEntries = computed<[string, number][]>(() => Array.from(quickList.entries()))
+
 const verifyRows = reactive<{code:string, ok:boolean}[]>([])
 const builder = reactive(new Map<string, {qty:number, desc?:string}>())
 const knownCount = computed(() => verifyRows.filter(r=>r.ok).length)
