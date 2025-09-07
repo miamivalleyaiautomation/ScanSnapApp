@@ -46,7 +46,7 @@
           :style="torchOn ? 'background:var(--brand);color:#fff;border-color:transparent' : ''"
           @click="toggleTorch" :title="torchOn ? 'Torch Off' : 'Torch On'" aria-label="Toggle torch">🔦</button>
 
-        <!-- Toast feedback -->
+        <!-- Toast -->
         <div v-if="toast.show" class="toast" role="status" aria-live="polite">{{ toast.text }}</div>
 
         <!-- Live bbox painter -->
@@ -61,7 +61,7 @@
         />
       </div>
 
-      <!-- Tap-to-add -->
+      <!-- Tap-to-add (enabled whenever we have a valid preview code) -->
       <div class="row" style="margin-top:8px">
         <button class="btn" style="flex:1" :disabled="!canTap" @click="tapToAdd">
           {{ tapLabel }}
@@ -420,10 +420,9 @@ onMounted(() => {
   try{ const C = JSON.parse(localStorage.getItem(LS.catalog)||'[]') as [string,string][]; catalog.clear(); for(const [c,d] of C) catalog.set(c,d) }catch{}
 })
 
-/* Live detection + button gating */
+/* Live detection (no short timeout gating) */
+type DetectedEvt = { rawValue?: string; format?: string }
 const live = reactive<{ raw: string | null; fmt?: Format }>({ raw: null, fmt: undefined })
-const liveActive = ref(false)
-let activeTimer: number | undefined
 
 const previewCode = computed<string>(() => {
   const raw = live.raw?.trim()
@@ -437,39 +436,22 @@ const previewCode = computed<string>(() => {
   }
   return code
 })
-const canTap = computed(() => !!(previewCode.value && liveActive.value))
+/* enable Tap when we have a valid, trimmed preview */
+const canTap = computed(() => !!previewCode.value)
 const tapLabel = computed(() => previewCode.value ? `Tap to add ${previewCode.value}` : 'Tap to add')
 
-function markActive(ms = 900){
-  liveActive.value = true
-  if(activeTimer) clearTimeout(activeTimer as any)
-  activeTimer = setTimeout(() => { liveActive.value = false }, ms) as any
-}
-
-/* Toast feedback */
-const toast = reactive({ show:false, text:'' })
-let toastTimer: number | undefined
-function showToast(text:string, ms=900){
-  toast.text = text
-  toast.show = true
-  if(toastTimer) clearTimeout(toastTimer as any)
-  toastTimer = setTimeout(() => { toast.show = false }, ms) as any
-}
-
-/* Events */
 function onDetect(payload:any){
-  const first = (payload as any[])[0]
+  const first = (payload as DetectedEvt[])[0]
   const text = String(first?.rawValue ?? '').trim()
   const fmt  = String(first?.format ?? '').toLowerCase() as Format | undefined
   live.raw = text || null
   live.fmt = fmt
-  if (text) markActive()
 }
 function tapToAdd(){
   const code = previewCode.value
   if(!code) return
   commitCode(code)
-  showToast('✔ Added')
+  showToast(`✔ Added ${code}`)
 }
 
 /* Commit logic */
@@ -480,7 +462,7 @@ const last = reactive<{code:string|null, qty:number}>({ code:null, qty:0 })
 
 function commitCode(code:string){
   if(!code) return
-  if(beep.value) playBeep()                 /* why: tactile feedback at commit */
+  if(beep.value) playBeep()
 
   if(mode.value==='quick'){
     quickList.set(code, (quickList.get(code) || 0) + 1)
@@ -518,7 +500,7 @@ function removeItem(which:'quick'|'builder', code:string){ if(which==='quick') q
 function removeVerify(code:string){ const i = verifyRows.findIndex(r=>r.code===code); if(i>=0) verifyRows.splice(i,1) }
 function clearMode(which:'quick'|'verify'|'builder'){ if(which==='quick') quickList.clear(); if(which==='verify') verifyRows.splice(0); if(which==='builder') builder.clear() }
 
-/* Painter: bbox + code text each frame */
+/* Painter: bbox + text each frame (from QrcodeStream docs) */
 type Detected = { boundingBox?: {x:number;y:number;width:number;height:number}; rawValue?: string }
 function paintTrack(codes: Detected[], ctx: CanvasRenderingContext2D) {
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
@@ -535,7 +517,7 @@ function paintTrack(codes: Detected[], ctx: CanvasRenderingContext2D) {
   ctx.font = '600 14px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
   for (const c of codes) {
     const bb = c?.boundingBox; if (!bb) continue
-    ctx.strokeRect(bb.x, bb.y, bb.width, bb.height)          /* why: stable overlay above video */
+    ctx.strokeRect(bb.x, bb.y, bb.width, bb.height)
     if (c?.rawValue) {
       const text = String(c.rawValue), pad = 4
       const m = ctx.measureText(text)
@@ -548,6 +530,16 @@ function paintTrack(codes: Detected[], ctx: CanvasRenderingContext2D) {
     }
   }
   ctx.restore()
+}
+
+/* Toast */
+const toast = reactive({ show:false, text:'' })
+let toastTimer: number | undefined
+function showToast(text:string, ms=900){
+  toast.text = text
+  toast.show = true
+  if(toastTimer) clearTimeout(toastTimer as any)
+  toastTimer = setTimeout(() => { toast.show = false }, ms) as any
 }
 
 /* Beep */
@@ -567,7 +559,7 @@ function playBeep(){
 :deep(canvas){ position:absolute; inset:0; z-index:3; }
 :deep(video){ position:relative; z-index:1; }
 
-/* Toast sits above video; high contrast for quick acknowledgment */
+/* Toast above video */
 .toast{
   position:absolute;
   left:50%; bottom:10px; transform:translateX(-50%);
