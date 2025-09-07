@@ -82,20 +82,21 @@
           <colgroup>
             <col class="col-barcode" />
             <col class="col-qty" />
-            <col class="col-del" />
           </colgroup>
-          <thead><tr><th>Barcode</th><th class="right">QTY</th><th></th></tr></thead>
+          <thead><tr><th>Barcode</th><th class="right">QTY</th></tr></thead>
           <tbody>
             <tr v-for="([code, qty]) in quickEntries" :key="code">
               <td class="barcode-col"><div class="barcode-text">{{ code }}</div></td>
-              <td class="right qty">
-                <div class="qty-wrap">
-                  <button class="icon-btn" @click="changeQty('quick', code, -1)">−</button>
-                  <span class="qty-num">{{ qty }}</span>
-                  <button class="icon-btn" @click="changeQty('quick', code, +1)">＋</button>
+              <td class="qty-cell">
+                <div class="qty-pack">
+                  <div class="qty-wrap">
+                    <button class="icon-btn" @click="changeQty('quick', code, -1)">−</button>
+                    <span class="qty-num">{{ qty }}</span>
+                    <button class="icon-btn" @click="changeQty('quick', code, +1)">＋</button>
+                  </div>
+                  <button class="icon-btn delete" @click="removeItem('quick', code)" aria-label="Delete">✖</button>
                 </div>
               </td>
-              <td class="right"><button class="icon-btn danger" @click="removeItem('quick', code)">🗑</button></td>
             </tr>
           </tbody>
         </table>
@@ -123,7 +124,7 @@
                 <span v-if="r.ok" class="ok" aria-label="Known">✔</span>
                 <span v-else class="bad" aria-label="Unknown">✖</span>
               </td>
-              <td class="right"><button class="icon-btn danger" @click="removeVerify(r.code)">🗑</button></td>
+              <td class="right"><button class="icon-btn delete" @click="removeVerify(r.code)" aria-label="Delete">✖</button></td>
             </tr>
           </tbody>
         </table>
@@ -145,9 +146,8 @@
           <colgroup>
             <col class="col-barcode" />
             <col class="col-qty" />
-            <col class="col-del" />
           </colgroup>
-          <thead><tr><th>Barcode / Description</th><th class="right">QTY</th><th></th></tr></thead>
+          <thead><tr><th>Barcode / Description</th><th class="right">QTY</th></tr></thead>
           <tbody>
             <tr v-for="row in builderRows" :key="row.code">
               <td>
@@ -161,14 +161,16 @@
                          placeholder="Enter description..." style="width:100%" />
                 </template>
               </td>
-              <td class="right qty">
-                <div class="qty-wrap">
-                  <button class="icon-btn" @click="changeQty('builder', row.code, -1)">−</button>
-                  <span class="qty-num">{{ row.qty }}</span>
-                  <button class="icon-btn" @click="changeQty('builder', row.code, +1)">＋</button>
+              <td class="qty-cell">
+                <div class="qty-pack">
+                  <div class="qty-wrap">
+                    <button class="icon-btn" @click="changeQty('builder', row.code, -1)">−</button>
+                    <span class="qty-num">{{ row.qty }}</span>
+                    <button class="icon-btn" @click="changeQty('builder', row.code, +1)">＋</button>
+                  </div>
+                  <button class="icon-btn delete" @click="removeItem('builder', row.code)" aria-label="Delete">✖</button>
                 </div>
               </td>
-              <td class="right"><button class="icon-btn danger" @click="removeItem('builder', row.code)">🗑</button></td>
             </tr>
           </tbody>
         </table>
@@ -626,14 +628,23 @@ function playBeep(){
   --overlayBg: rgba(0,0,0,.65);
   --overlayFg: #fff;
 
+  /* fallback theme tokens used below if globals missing */
+  --fg: #e8e8e8;
+  --edge: rgba(255,255,255,.14);
+
   /* column widths */
-  --qtyCol: 200px;
+  --qtyCol: 260px;         /* room for - # + and delete */
   --statusCol: 96px;
   --delCol: 56px;
 }
-.light{ --overlayBg: rgba(255,255,255,.8); --overlayFg: #000; }
+.light{
+  --overlayBg: rgba(255,255,255,.8);
+  --overlayFg: #000;
+  --fg: #111;
+  --edge: rgba(0,0,0,.14);
+}
 @media (max-width:420px){
-  :root{ --qtyCol: 160px; --statusCol: 84px; }
+  :root{ --qtyCol: 220px; --statusCol: 84px; }
 }
 
 .video{ position: relative; }
@@ -652,7 +663,7 @@ function playBeep(){
 .barcode-col{ width:auto; }
 .barcode-text{
   display:inline-block;
-  min-width:20ch;  /* show ~20 chars when space allows */
+  min-width:20ch;
   max-width:100%;
   white-space:nowrap;
   overflow:hidden;
@@ -665,25 +676,33 @@ function playBeep(){
 .center{ text-align:center; }
 .ellipsis{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
-/* QTY alignment tightened near delete button */
-td.qty{ padding-right:6px; }
+/* QTY cell: align cluster to the right, keep delete inside the same column */
+td.qty-cell{ padding-right:6px; }
+.qty-pack{
+  display:flex;
+  justify-content:flex-end;  /* push content to the far right */
+  align-items:center;
+  gap:10px;                  /* space between qty-wrap and delete */
+}
 .qty-wrap{
   display:inline-flex;
-  width:100%;
-  justify-content:flex-end;
   align-items:center;
   gap:6px;
 }
-.qty-num{ min-width:24px; text-align:center; }
+.qty-num{ min-width:26px; text-align:center; }
 
-/* theme-friendly trash button */
-.icon-btn.danger{
-  background: var(--brand) !important;
-  color: #fff !important;
-  border-color: transparent !important;
+/* Delete button: neutral by default, brand only while pressed */
+.icon-btn.delete{
+  background: transparent;
+  color: inherit;
+  border-color: var(--edge);
 }
-.icon-btn.danger:hover{ filter: brightness(1.08); }
-.icon-btn.danger:active{ filter: brightness(.96); }
+.icon-btn.delete:hover{ filter: brightness(1.06); }
+.icon-btn.delete:active{
+  background: var(--brand);
+  color:#fff;
+  border-color: var(--brand);
+}
 
 .toast{
   position:absolute;
