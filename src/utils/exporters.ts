@@ -5,7 +5,7 @@ import jsPDF from 'jspdf'
 // @ts-ignore
 import autoTable from 'jspdf-autotable'
 
-/** CSV */
+/** CSV export */
 export function exportCSV(filename: string, rows: (string | number)[][], headers?: string[]) {
   const all = headers ? [headers, ...rows] : rows
   const csv = all.map(r => r.map(cell => {
@@ -15,7 +15,7 @@ export function exportCSV(filename: string, rows: (string | number)[][], headers
   triggerDownload(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), filename)
 }
 
-/** XLSX */
+/** XLSX export */
 export function exportXLSX(filename: string, rows: (string | number)[][], headers?: string[]) {
   const data = headers ? [headers, ...rows] : rows
   const ws = XLSX.utils.aoa_to_sheet(data)
@@ -24,7 +24,12 @@ export function exportXLSX(filename: string, rows: (string | number)[][], header
   XLSX.writeFile(wb, filename)
 }
 
-/** PDF (always light): header (favicon+wordmark+divider) + footer (timestamp left, page/total right) on every page */
+/**
+ * PDF export (A4 portrait, always light theme)
+ * - Header (every page): favicon left + wordmark centered, both keep aspect ratio; divider line under header.
+ * - Footer (every page): timestamp (left) + page/total (right).
+ * - Table header: white bg, bold black text (no solid black fill).
+ */
 export async function exportPDF(
   filename: string,
   rows: (string | number)[][],
@@ -32,29 +37,33 @@ export async function exportPDF(
 ) {
   const iconUrl = '/favicon_1024_light.png'
   const textUrl = '/text_1024_light.png'
-  const [iconData, textData] = await Promise.all([toDataURL(iconUrl), toDataURL(textUrl)])
+
+  // Load images as data URLs with natural sizes for aspect-true scaling
+  const [iconImg, textImg] = await Promise.all([loadImageInfo(iconUrl), loadImageInfo(textUrl)])
 
   const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4', compress: true })
   const pageW = doc.internal.pageSize.getWidth()
   const pageH = doc.internal.pageSize.getHeight()
 
-  // layout
+  // Layout
   const marginL = 12
   const marginR = 12
   const headerTop = 10
   const iconH = 10
   const textH = 13
+  const iconW = scaleWidth(iconImg, iconH)
+  const textW = scaleWidth(textImg, textH)
   const headerBottomY = Math.max(headerTop + textH, headerTop + iconH) + 3
-  const footerBottom = 8
-  const footerY = pageH - footerBottom
+  const footerBottomPad = 8
+  const footerY = pageH - footerBottomPad
   const tableTop = headerBottomY + 4
   const tableBottom = 12
 
-  // colors (light)
+  // Colors (light)
   const dividerGray = 180
   const textGray = 30
 
-  // QTY column right align if header named QTY
+  // Column alignments (right-align QTY)
   const colStyles: Record<number, any> = {}
   const qtyIdx = headers ? headers.findIndex(h => h.trim().toLowerCase() === 'qty') : -1
   if (qtyIdx >= 0) colStyles[qtyIdx] = { halign: 'right' }
@@ -65,55 +74,105 @@ export async function exportPDF(
     body: rows,
     startY: tableTop,
     margin: { left: marginL, right: marginR, top: tableTop, bottom: tableBottom },
-    styles: { fontSize: 9, cellPadding: 2.5, overflow: 'linebreak' },
-    headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255] },
+    styles: {
+      fontSize: 9,
+      cellPadding: 2.5,
+      overflow: 'linebreak',
+      lineColor: 220,
+      lineWidth: 0.1
+    },
+    headStyles: {
+      fillColor: [255, 255, 255],  // white header background
+      textColor: [0, 0, 0],        // black header text
+      fontStyle: 'bold',
+      halign: 'left',
+      lineColor: 180,
+      lineWidth: 0.2
+    },
+    bodyStyles: {},
     columnStyles: colStyles,
-    didDrawPage: () => {
-      // Header
+    didDrawPage: (data: any) => {
+      // ----- Header -----
       try {
-        const iconW = iconH
-        doc.addImage(iconData, 'PNG', marginL, headerTop, iconW, iconH)
-        const textW = 60
-        const textX = (pageW - textW) / 2
-        doc.addImage(textData, 'PNG', textX, headerTop, textW, textH)
+        // favicon (left), aspect-true
+        doc.addImage(iconImg.dataURL, 'PNG', marginL, headerTop, iconW, iconH)
+
+        // wordmark (center), aspect-true
+        const tx = (pageW - textW) / 2
+        doc.addImage(textImg.dataURL, 'PNG', tx, headerTop, textW, textH)
       } catch {}
+
+      // divider
       doc.setDrawColor(dividerGray)
       doc.setLineWidth(0.3)
       doc.line(marginL, headerBottomY, pageW - marginR, headerBottomY)
 
-      // Footer
+      // ----- Footer -----
       doc.setTextColor(textGray)
       doc.setFontSize(8)
       const ts = formatStamp(new Date())
       doc.text(ts, marginL, footerY)
-      const page = String(doc.getCurrentPageInfo().pageNumber || (doc as any).internal.getNumberOfPages?.() || 1)
-      const total = String((doc as any).internal.getNumberOfPages?.() || doc.getNumberOfPages?.() || 1)
-      const rightText = `${page}/${total}`
-      const txtW = doc.getTextWidth(rightText)
-      doc.text(rightText, pageW - marginR - txtW, footerY)
+
+      const totalPages = (doc as any).internal.getNumberOfPages?.() || doc.getNumberOfPages?.() || 1
+      const pageNum = data?.pageNumber ?? (doc as any).getCurrentPageInfo?.().pageNumber ?? 1
+      const rightText = `${pageNum}/${totalPages}`
+      const tw = doc.getTextWidth(rightText)
+      doc.text(rightText, pageW - marginR - tw, footerY)
     }
   })
 
   doc.save(filename)
 }
 
-/* helpers */
+/* ---------- helpers ---------- */
 function triggerDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
-  a.href = url; a.download = filename; a.click()
+  a.href = url
+  a.download = filename
+  a.click()
   setTimeout(() => URL.revokeObjectURL(url), 0)
 }
-async function toDataURL(url: string): Promise<string> {
+
+/** Load an image, return dataURL and natural size. Keeps aspect when drawing. */
+async function loadImageInfo(url: string): Promise<{ dataURL: string; width: number; height: number }> {
   const res = await fetch(url)
   const blob = await res.blob()
-  return new Promise<string>((resolve, reject) => {
+  const objUrl = URL.createObjectURL(blob)
+  try {
+    const img = await loadHTMLImage(objUrl)
+    const dataURL = await blobToDataURL(blob)
+    return { dataURL, width: img.naturalWidth || img.width, height: img.naturalHeight || img.height }
+  } finally {
+    URL.revokeObjectURL(objUrl)
+  }
+}
+
+function loadHTMLImage(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = reject
+    img.src = url
+  })
+}
+
+function blobToDataURL(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve(String(reader.result))
     reader.onerror = reject
     reader.readAsDataURL(blob)
   })
 }
+
+/** Given desired height, compute width preserving aspect ratio. */
+function scaleWidth(meta: { width: number; height: number }, targetH: number): number {
+  if (!meta.height || !meta.width) return targetH
+  const ratio = meta.width / meta.height
+  return targetH * ratio
+}
+
 function pad(n: number): string { return n < 10 ? `0${n}` : String(n) }
 function formatStamp(d: Date): string {
   const yyyy = d.getFullYear()
