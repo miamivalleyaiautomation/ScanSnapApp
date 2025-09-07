@@ -8,8 +8,7 @@
         <img v-else src="/favicon_1024_light.png" alt="icon" style="height:28px" />
       </div>
       <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
-        <img :src="isDark ? '/text_1024_dark.png' : '/text_1024_light.png'" alt="ScanSnap"
-             style="height:28px;transform:scale(1.15);transform-origin:center" />
+        <img :src="isDark ? '/text_1024_dark.png' : '/text_1024_light.png'" alt="ScanSnap" style="height:28px;transform:scale(1.15);transform-origin:center" />
       </div>
       <button class="theme-toggle" @click="toggleTheme">{{ isDark ? 'Light' : 'Dark' }}</button>
     </div>
@@ -24,9 +23,7 @@
     <!-- SCAN -->
     <div v-if="tab==='scan'" class="panel">
       <div class="row nowrap" style="margin-bottom:8px">
-        <button class="btn" style="flex:1" @click="toggleCamera">
-          {{ scanning ? 'Stop Camera' : 'Start Camera' }}
-        </button>
+        <button class="btn" style="flex:1" @click="toggleCamera">{{ scanning ? 'Stop Camera' : 'Start Camera' }}</button>
         <button class="btn ghost" style="flex:1" @click="requestPermission">Camera Permission</button>
       </div>
 
@@ -38,7 +35,6 @@
 
       <!-- Camera -->
       <div class="video" ref="videoBox">
-        <!-- Torch -->
         <button
           v-if="scanning && torchSupported"
           class="icon-btn"
@@ -46,24 +42,21 @@
           :style="torchOn ? 'background:var(--brand);color:#fff;border-color:transparent' : ''"
           @click="toggleTorch" :title="torchOn ? 'Torch Off' : 'Torch On'" aria-label="Toggle torch">🔦</button>
 
-        <!-- Toast -->
         <div v-if="toast.show" class="toast" role="status" aria-live="polite">{{ toast.text }}</div>
 
         <QrcodeStream
           v-if="scanning"
           :constraints="cameraConstraints"
           :formats="activeFormats"
-          :track="paintTrack"          <!-- painter drives preview on/off -->
+          :track="paintTrack"
           @camera-on="onCameraReady"
           @error="onError"
         />
       </div>
 
-      <!-- Tap-to-add: enabled only when painter has set a code -->
+      <!-- Tap-to-add (enabled only when painter has a live code) -->
       <div class="row" style="margin-top:8px">
-        <button class="btn" style="flex:1" :disabled="!canTap" @click="tapToAdd">
-          {{ tapLabel }}
-        </button>
+        <button class="btn" style="flex:1" :disabled="!canTap" @click="tapToAdd">{{ tapLabel }}</button>
       </div>
 
       <!-- Recent + Modes -->
@@ -85,11 +78,7 @@
       <!-- QUICK LIST -->
       <div v-if="mode==='quick'">
         <table class="table">
-          <colgroup>
-            <col />                 <!-- barcode flex -->
-            <col style="width:220px" />
-            <col style="width:56px" />
-          </colgroup>
+          <colgroup><col /><col style="width:220px" /><col style="width:56px" /></colgroup>
           <thead><tr><th>Barcode</th><th class="right">QTY</th><th></th></tr></thead>
           <tbody>
             <tr v-for="([code, qty]) in quickEntries" :key="code">
@@ -116,11 +105,7 @@
       <!-- VERIFY -->
       <div v-if="mode==='verify'">
         <table class="table">
-          <colgroup>
-            <col />                 <!-- barcode flex -->
-            <col style="width:120px" />
-            <col style="width:56px" />
-          </colgroup>
+          <colgroup><col /><col style="width:120px" /><col style="width:56px" /></colgroup>
           <thead><tr><th>Barcode</th><th class="center">Status</th><th></th></tr></thead>
           <tbody>
             <tr v-for="r in verifyRows" :key="r.code">
@@ -148,11 +133,7 @@
       <!-- ORDER BUILDER -->
       <div v-if="mode==='builder'">
         <table class="table">
-          <colgroup>
-            <col />                 <!-- barcode/desc flex -->
-            <col style="width:220px" />
-            <col style="width:56px" />
-          </colgroup>
+          <colgroup><col /><col style="width:220px" /><col style="width:56px" /></colgroup>
           <thead><tr><th>Barcode / Description</th><th class="right">QTY</th><th></th></tr></thead>
           <tbody>
             <tr v-for="row in builderRows" :key="row.code">
@@ -162,13 +143,7 @@
                   <div style="opacity:.85;font-size:.92em" class="ellipsis">{{ catalog.get(row.code) }}</div>
                 </template>
                 <template v-else>
-                  <input
-                    class="input input-compact"
-                    :value="row.desc"
-                    @input="setBuilderDesc(row.code, ($event.target as HTMLInputElement).value)"
-                    placeholder="Enter description..."
-                    style="width:100%"
-                  />
+                  <input class="input input-compact" :value="row.desc" @input="setBuilderDesc(row.code, ($event.target as HTMLInputElement).value)" placeholder="Enter description..." style="width:100%" />
                 </template>
               </td>
               <td class="right">
@@ -331,7 +306,7 @@ function toggleCamera(){
     scanning.value=false
     if(videoTrack.value){ try{ (videoTrack.value as any).applyConstraints?.({ advanced:[{ torch:false }] }) }catch{} }
     torchOn.value=false
-    clearPreview()                      /* why: stop should clear */
+    clearPreview()
   }else{
     scanning.value=true
   }
@@ -444,7 +419,7 @@ onMounted(() => {
   try{ const C = JSON.parse(localStorage.getItem(LS.catalog)||'[]') as [string,string][]; catalog.clear(); for(const [c,d] of C) catalog.set(c,d) }catch{}
 })
 
-/* Live preview from bbox painter (no timers) */
+/* Live preview from painter (no timers) */
 type Detected = { boundingBox?: {x:number;y:number;width:number;height:number}; rawValue?: string; format?: string }
 const live = reactive<{ raw: string | null; fmt?: Format }>({ raw: null, fmt: undefined })
 
@@ -464,7 +439,6 @@ const previewCode = computed<string>(() => {
 const canTap = computed(() => scanning.value && !!previewCode.value)
 const tapLabel = computed(() => previewCode.value ? `Tap to add ${previewCode.value}` : 'Tap to add')
 
-/* Painter sets/clears live.raw each frame based on bbox presence */
 function paintTrack(codes: Detected[], ctx: CanvasRenderingContext2D) {
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
 
@@ -510,49 +484,33 @@ function paintTrack(codes: Detected[], ctx: CanvasRenderingContext2D) {
   if (bestText) {
     if (live.raw !== bestText) { live.raw = bestText; live.fmt = bestFmt }
   } else {
-    if (live.raw !== null) { clearPreview() }     /* why: no bbox with code -> disable Tap immediately */
+    if (live.raw !== null) { clearPreview() }
   }
 }
 
-function tapToAdd(){
-  const code = previewCode.value
-  if(!code) return
-  commitCode(code)
-  showToast(`✔ Added ${code}`)
-}
-
-/* Commit logic */
+/* Commit/exports/controls */
 const knownCount = computed(() => verifyRows.filter(r=>r.ok).length)
 const unknownCount = computed(() => verifyRows.filter(r=>!r.ok).length)
-const builderRows = computed(() =>
-  [...builder.entries()].map(([code, v]) => ({ code, qty:v.qty, desc:v.desc || '' }))
-)
+const builderRows = computed(() => [...builder.entries()].map(([code, v]) => ({ code, qty:v.qty, desc:v.desc || '' })))
 const last = reactive<{code:string|null, qty:number}>({ code:null, qty:0 })
 
+function tapToAdd(){ const code = previewCode.value; if(!code) return; commitCode(code); showToast(`✔ Added ${code}`) }
 function commitCode(code:string){
-  if(!code) return
   if(beep.value) playBeep()
-
   if(mode.value==='quick'){
-    quickList.set(code, (quickList.get(code) || 0) + 1)
-    setLast(code, quickList.get(code)!)
+    quickList.set(code, (quickList.get(code) || 0) + 1); setLast(code, quickList.get(code)!)
   } else if(mode.value==='verify'){
     const ok = catalog.has(code)
     const i = verifyRows.findIndex(r => r.code === code)
-    if (i >= 0) { verifyRows[i] = { code, ok } } else { verifyRows.push({ code, ok }) }
+    if (i >= 0) verifyRows[i] = { code, ok }; else verifyRows.push({ code, ok })
     setLast(code, 1)
   } else {
     const entry = builder.get(code) || { qty:0, desc: catalog.get(code) || '' }
-    entry.qty += 1
-    if(!entry.desc && catalog.get(code)) entry.desc = catalog.get(code) || ''
-    builder.set(code, entry)
-    setLast(code, entry.qty)
+    entry.qty += 1; if(!entry.desc && catalog.get(code)) entry.desc = catalog.get(code) || ''
+    builder.set(code, entry); setLast(code, entry.qty)
   }
 }
-function setBuilderDesc(code:string, desc:string){
-  const cur = builder.get(code) || { qty:0, desc:'' }
-  builder.set(code, { ...cur, desc })
-}
+function setBuilderDesc(code:string, desc:string){ const cur = builder.get(code) || { qty:0, desc:'' }; builder.set(code, { ...cur, desc }) }
 function onError(err:any){ console.warn(err) }
 function setLast(code:string, qty:number){ last.code = code; last.qty = qty }
 function incLast(){ if(!last.code) return; if(mode.value==='quick'){ changeQty('quick', last.code, +1) } else { changeQty('builder', last.code, +1) } }
@@ -573,17 +531,10 @@ function removeItem(which:'quick'|'builder', code:string){ if(which==='quick') q
 function removeVerify(code:string){ const i = verifyRows.findIndex(r=>r.code===code); if(i>=0) verifyRows.splice(i,1) }
 function clearMode(which:'quick'|'verify'|'builder'){ if(which==='quick') quickList.clear(); if(which==='verify') verifyRows.splice(0); if(which==='builder') builder.clear() }
 
-/* Toast */
+/* Toast + Beep */
 const toast = reactive({ show:false, text:'' })
 let toastTimer: number | undefined
-function showToast(text:string, ms=900){
-  toast.text = text
-  toast.show = true
-  if(toastTimer) clearTimeout(toastTimer as any)
-  toastTimer = setTimeout(() => { toast.show = false }, ms) as any
-}
-
-/* Beep */
+function showToast(text:string, ms=900){ toast.text = text; toast.show = true; if(toastTimer) clearTimeout(toastTimer as any); toastTimer = setTimeout(() => { toast.show = false }, ms) as any }
 function playBeep(){
   const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
   const o = ctx.createOscillator(); const g = ctx.createGain()
@@ -606,7 +557,7 @@ function playBeep(){
 .barcode-col{ width:auto; }
 .barcode-text{
   display:inline-block;
-  min-width:20ch;         /* show ~20 chars when space allows */
+  min-width:20ch;
   max-width:100%;
   white-space:nowrap;
   overflow:hidden;
