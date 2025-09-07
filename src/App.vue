@@ -1,7 +1,6 @@
 <!-- FILE: src/App.vue -->
 <template>
   <div class="container">
-    <!-- Header -->
     <div class="header">
       <div class="logo">
         <img v-if="isDark" src="/favicon_1024_dark.png" alt="icon">
@@ -11,7 +10,6 @@
       <button class="theme-toggle" @click="toggleTheme">{{ isDark ? 'Light' : 'Dark' }}</button>
     </div>
 
-    <!-- FULL-WIDTH TABS -->
     <div class="tabs">
       <button class="tab" :class="{active:tab==='scan'}" @click="tab='scan'">SCAN</button>
       <button class="tab" :class="{active:tab==='catalog'}" @click="tab='catalog'">CATALOG</button>
@@ -33,8 +31,8 @@
           v-if="scanning"
           :constraints="cameraConstraints"
           :formats="activeFormats"
+          :paused="paused"
           @camera-on="onCameraReady"
-          @decode="onDecode"
           @detect="onDetect"
           @error="onError"
         />
@@ -222,6 +220,7 @@ function setMode(m: typeof mode.value){ mode.value = m }
 
 /* Camera & devices */
 const scanning = ref(false)
+const paused = ref(false)
 const devices = ref<MediaDeviceInfo[]>([])
 const selectedDeviceId = ref<string|undefined>(undefined)
 const cameraConstraints = computed<MediaTrackConstraints>(() =>
@@ -252,8 +251,11 @@ watch(stripCD, v => localStorage.setItem('stripCD', v?'1':'0'))
 watch(validateCD, v => localStorage.setItem('validateCD', v?'1':'0'))
 watch(beep, v => localStorage.setItem('beep', v?'1':'0'))
 
-/* QrcodeStream expects a string[] of format names */
-const activeFormats = computed(() => formatList.filter(f => enabled[f]))
+/* QrcodeStream formats: never empty */
+const activeFormats = computed(() => {
+  const list = formatList.filter(f => enabled[f])
+  return list.length ? list : ['qr_code']
+})
 
 /* Group toggles */
 const linearOn = computed(() => LINEAR_GROUP.every(f => enabled[f]))
@@ -328,7 +330,7 @@ const builderRows = computed(() => [...builder.entries()].map(([code, v]) => ({ 
 
 const last = reactive<{code:string|null, qty:number}>({ code:null, qty:0 })
 
-/* ---- Scan handlers: support BOTH events ---- */
+/* Detect handler */
 let lastAt = 0
 function throttle(): boolean {
   const now = Date.now()
@@ -336,18 +338,14 @@ function throttle(): boolean {
   lastAt = now
   return false
 }
-function onDecode(text: string){
-  if(throttle()) return
-  processScan(text, undefined) // no format info in @decode
-}
 function onDetect(payload: any){
-  if(throttle()) return
   const first = (payload as any[])[0]
   const text = String(first?.rawValue ?? '').trim()
   const fmt = String(first?.format ?? '').toLowerCase() as Format | undefined
-  if(!text) return
+  if(!text || throttle()) return
   processScan(text, fmt)
 }
+
 function processScan(raw: string, fmt?: Format){
   let code = raw
   if(fmt){
@@ -374,6 +372,10 @@ function processScan(raw: string, fmt?: Format){
     builder.set(code, entry)
     setLast(code, entry.qty)
   }
+
+  // Reset internal cache so the same code can be detected again
+  paused.value = true
+  setTimeout(() => { paused.value = false }, 180)
 }
 
 function onError(err:any){ console.warn(err) }
