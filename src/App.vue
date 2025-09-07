@@ -245,6 +245,11 @@
         <label class="kbd no-wrap"><input type="checkbox" :checked="matrixOn" @change="toggleMatrix($event)" /> matrix_codes</label>
       </div>
 
+      <!-- New: Clear all trims -->
+      <div class="row nowrap" style="margin-bottom:8px">
+        <button class="btn warn" @click="clearAllTrims">Clear all trims</button>
+      </div>
+
       <table class="table setup">
         <thead><tr><th>Format</th><th>Trim Prefix</th><th>Trim Suffix</th><th class="center">Enabled</th></tr></thead>
         <tbody>
@@ -395,6 +400,13 @@ function toggleMatrix(e: Event){
 }
 function enableAll(){ formatList.forEach(f => { enabled[f] = true }) }
 function disableAll(){ formatList.forEach(f => { enabled[f] = false }) }
+/* NEW: zero-out all prefix/suffix */
+function clearAllTrims(){
+  for (const f of formatList){
+    trims[f].prefix = 0
+    trims[f].suffix = 0
+  }
+}
 
 /* Catalog */
 const catalog = reactive(new Map<string,string>())
@@ -731,12 +743,12 @@ function playBeep(){
   --fg: #e8e8e8;
   --edge: rgba(255,255,255,.14);
 
-  /* Header (+50px, ~30% bigger) */
-  --headerH: 96px;
+  /* Header height reduced by 25px (96 -> 71) */
+  --headerH: 71px;
   --logoH: 36px;
 
   /* column widths */
-  --qtyCol: 260px;      /* room for [- # +  ✖] */
+  --qtyCol: 260px;
   --statusCol: 96px;
   --delCol: 56px;
 }
@@ -754,8 +766,8 @@ function playBeep(){
 .header{
   height: var(--headerH);
   display:flex;
-  align-items:center;           /* vertical center */
-  border-bottom: 1px solid var(--edge); /* subtle divider */
+  align-items:center;
+  border-bottom: 1px solid var(--edge);
 }
 .header-content{
   position:relative;
@@ -765,13 +777,21 @@ function playBeep(){
   width:100%;
 }
 .logo{ display:flex; align-items:center; gap:.5rem; }
-.logo-icon{ height: var(--logoH); }
+.logo-icon{
+  height: var(--logoH);
+  max-height: calc(var(--headerH) - 24px);
+  object-fit: contain;
+}
 .logo-center{
   position:absolute; inset:0;
   display:flex; align-items:center; justify-content:center;
   pointer-events:none;
 }
-.logo-text{ height: var(--logoH); transform: scale(1.15); transform-origin:center; }
+.logo-text{
+  height: calc(var(--logoH) * 1.3);
+  max-height: calc(var(--headerH) - 20px);
+  object-fit: contain;
+}
 
 /* Camera */
 .video{ position: relative; }
@@ -803,19 +823,10 @@ function playBeep(){
 .center{ text-align:center; }
 .ellipsis{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
-/* QTY column: right-aligned cluster with delete looking like +/- */
+/* QTY column */
 td.qty-cell{ padding-right:6px; }
-.qty-pack{
-  display:flex;
-  justify-content:flex-end;  /* push content to far right */
-  align-items:center;
-  gap:10px;                  /* space between qty-wrap and delete */
-}
-.qty-wrap{
-  display:inline-flex;
-  align-items:center;
-  gap:6px;
-}
+.qty-pack{ display:flex; justify-content:flex-end; align-items:center; gap:10px; }
+.qty-wrap{ display:inline-flex; align-items:center; gap:6px; }
 .qty-num{ min-width:26px; text-align:center; }
 
 /* Toast */
