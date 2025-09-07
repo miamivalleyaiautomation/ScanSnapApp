@@ -1,4 +1,4 @@
-<!-- FILE: src/App.vue (full, updated Setup layout classes) -->
+<!-- FILE: src/App.vue -->
 <template>
   <div class="container">
     <!-- Header -->
@@ -174,15 +174,17 @@
       </div>
 
       <h3>Scanner Formats</h3>
-      <!-- keep pills on one line -->
-      <div class="row nowrap" style="margin-bottom:8px">
+      <!-- Row 1: Enable/Disable -->
+      <div class="row nowrap" style="margin-bottom:6px">
         <button class="btn ghost" @click="enableAll">Enable all</button>
         <button class="btn ghost" @click="disableAll">Disable all</button>
+      </div>
+      <!-- Row 2: Linear/Matrix -->
+      <div class="row nowrap" style="margin-bottom:8px">
         <label class="kbd no-wrap"><input type="checkbox" :checked="linearOn" @change="toggleLinear($event)"> linear_codes</label>
         <label class="kbd no-wrap"><input type="checkbox" :checked="matrixOn" @change="toggleMatrix($event)"> matrix_codes</label>
       </div>
 
-      <!-- compact table fits within width -->
       <table class="table setup">
         <thead>
           <tr>
