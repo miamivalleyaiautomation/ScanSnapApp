@@ -1,3 +1,4 @@
+<!-- FILE: src/App.vue -->
 <template>
   <div class="container">
     <!-- Header -->
@@ -33,12 +34,13 @@
           :constraints="cameraConstraints"
           :formats="activeFormats"
           @camera-on="onCameraReady"
-          @detect="onDetect"
+          @decode="onDecode"        <!-- ← always fires with text -->
+          @detect="onDetect"        <!-- ← structured payload when available -->
           @error="onError"
         />
       </div>
 
-      <!-- Recent scan + Mode chips (stretch + same colors as main tabs) -->
+      <!-- Recent + Modes -->
       <div class="mini">
         <span class="kbd">Recent</span>
         <span style="font-weight:700">{{ last.code || '—' }}</span>
@@ -82,7 +84,7 @@
       <div v-if="mode==='verify'">
         <table class="table">
           <thead><tr><th>Barcode</th><th style="width:140px">Status</th><th style="width:64px"></th></tr></thead>
-          <tbody>
+        <tbody>
             <tr v-for="r in verifyRows" :key="r.code">
               <td>{{ r.code }}</td>
               <td>
@@ -93,7 +95,6 @@
             </tr>
           </tbody>
         </table>
-        <!-- ✓ / ✕ only under VERIFY table -->
         <div class="verify-summary">
           <span class="ok">✔ {{ knownCount }}</span>
           <span class="bad">✖ {{ unknownCount }}</span>
@@ -251,6 +252,7 @@ watch(stripCD, v => localStorage.setItem('stripCD', v?'1':'0'))
 watch(validateCD, v => localStorage.setItem('validateCD', v?'1':'0'))
 watch(beep, v => localStorage.setItem('beep', v?'1':'0'))
 
+/* QrcodeStream expects a string[] of format names */
 const activeFormats = computed(() => formatList.filter(f => enabled[f]))
 
 /* Group toggles */
@@ -284,7 +286,6 @@ const filteredCatalog = computed(() => {
   return rows
 })
 function guessCols(h: string[]){
-  const lower = (s:string)=>s.toLowerCase()
   barcodeCol.value = h.find(c => /^(barcode|code|upc|ean|sku)$/i.test(c)) || h[0]
   descCol.value = h.find(c => /(desc|name|title)/i.test(c)) || ''
 }
@@ -327,17 +328,27 @@ const builderRows = computed(() => [...builder.entries()].map(([code, v]) => ({ 
 
 const last = reactive<{code:string|null, qty:number}>({ code:null, qty:0 })
 
-/* Scan handler — uses QrcodeStream only */
+/* ---- Scan handlers: support BOTH events ---- */
 let lastAt = 0
-async function onDetect(payload: any){
+function throttle(): boolean {
   const now = Date.now()
-  if(now - lastAt < 300) return
+  if(now - lastAt < 300) return true
   lastAt = now
-
+  return false
+}
+function onDecode(text: string){
+  if(throttle()) return
+  processScan(text, undefined) // no format info in @decode
+}
+function onDetect(payload: any){
+  if(throttle()) return
   const first = (payload as any[])[0]
-  const raw = String(first.rawValue ?? '').trim()
-  const fmt = String(first.format ?? '').toLowerCase() as Format
-
+  const text = String(first?.rawValue ?? '').trim()
+  const fmt = String(first?.format ?? '').toLowerCase() as Format | undefined
+  if(!text) return
+  processScan(text, fmt)
+}
+function processScan(raw: string, fmt?: Format){
   let code = raw
   if(fmt){
     if(validateCD.value && !validateCheckDigit(code, fmt)) return
@@ -364,6 +375,7 @@ async function onDetect(payload: any){
     setLast(code, entry.qty)
   }
 }
+
 function onError(err:any){ console.warn(err) }
 function setLast(code:string, qty:number){ last.code = code; last.qty = qty }
 function incLast(){ if(!last.code) return; if(mode.value==='quick'){ changeQty('quick', last.code, +1) } else { changeQty('builder', last.code, +1) } }
