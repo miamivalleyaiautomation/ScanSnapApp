@@ -8,7 +8,8 @@
         <img v-else src="/favicon_1024_light.png" alt="icon" style="height:28px" />
       </div>
       <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
-        <img :src="isDark ? '/text_1024_dark.png' : '/text_1024_light.png'" alt="ScanSnap" style="height:28px;transform:scale(1.15);transform-origin:center" />
+        <img :src="isDark ? '/text_1024_dark.png' : '/text_1024_light.png'"
+             alt="ScanSnap" style="height:28px;transform:scale(1.15);transform-origin:center" />
       </div>
       <button class="theme-toggle" @click="toggleTheme">{{ isDark ? 'Light' : 'Dark' }}</button>
     </div>
@@ -54,7 +55,7 @@
         />
       </div>
 
-      <!-- Tap-to-add (enabled only when preview has a code) -->
+      <!-- Tap-to-add -->
       <div class="row" style="margin-top:8px">
         <button class="btn" style="flex:1" :disabled="!canTap" @click="tapToAdd">{{ tapLabel }}</button>
       </div>
@@ -78,7 +79,11 @@
       <!-- QUICK LIST -->
       <div v-if="mode==='quick'">
         <table class="table">
-          <colgroup><col /><col style="width:220px" /><col style="width:56px" /></colgroup>
+          <colgroup>
+            <col class="col-barcode" />
+            <col class="col-qty" />
+            <col class="col-del" />
+          </colgroup>
           <thead><tr><th>Barcode</th><th class="right">QTY</th><th></th></tr></thead>
           <tbody>
             <tr v-for="([code, qty]) in quickEntries" :key="code">
@@ -105,7 +110,11 @@
       <!-- VERIFY -->
       <div v-if="mode==='verify'">
         <table class="table">
-          <colgroup><col /><col style="width:120px" /><col style="width:56px" /></colgroup>
+          <colgroup>
+            <col class="col-barcode" />
+            <col class="col-status" />
+            <col class="col-del" />
+          </colgroup>
           <thead><tr><th>Barcode</th><th class="center">Status</th><th></th></tr></thead>
           <tbody>
             <tr v-for="r in verifyRows" :key="r.code">
@@ -133,7 +142,11 @@
       <!-- ORDER BUILDER -->
       <div v-if="mode==='builder'">
         <table class="table">
-          <colgroup><col /><col style="width:220px" /><col style="width:56px" /></colgroup>
+          <colgroup>
+            <col class="col-barcode" />
+            <col class="col-qty" />
+            <col class="col-del" />
+          </colgroup>
           <thead><tr><th>Barcode / Description</th><th class="right">QTY</th><th></th></tr></thead>
           <tbody>
             <tr v-for="row in builderRows" :key="row.code">
@@ -143,7 +156,9 @@
                   <div style="opacity:.85;font-size:.92em" class="ellipsis">{{ catalog.get(row.code) }}</div>
                 </template>
                 <template v-else>
-                  <input class="input input-compact" :value="row.desc" @input="setBuilderDesc(row.code, ($event.target as HTMLInputElement).value)" placeholder="Enter description..." style="width:100%" />
+                  <input class="input input-compact" :value="row.desc"
+                         @input="setBuilderDesc(row.code, ($event.target as HTMLInputElement).value)"
+                         placeholder="Enter description..." style="width:100%" />
                 </template>
               </td>
               <td class="right">
@@ -197,7 +212,7 @@
       </div>
 
       <table class="table catalog">
-        <colgroup><col style="width:42%" /><col style="width:58%" /></colgroup>
+        <colgroup><col class="col-barcode" /><col /></colgroup>
         <thead><tr><th class="barcode">Barcode</th><th class="desc">Description</th></tr></thead>
         <tbody>
           <tr v-for="row in filteredCatalog" :key="row.barcode">
@@ -248,7 +263,10 @@ import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount } 
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import { exportCSV, exportXLSX, exportPDF } from './utils/exporters'
-import { ALL_FORMATS, DEFAULT_TRIMS, LINEAR_GROUP, MATRIX_GROUP, type Format, type TrimRules, stripCheckDigit, validateCheckDigit, applyTrims } from './utils/barcode'
+import {
+  ALL_FORMATS, DEFAULT_TRIMS, LINEAR_GROUP, MATRIX_GROUP,
+  type Format, type TrimRules, stripCheckDigit, validateCheckDigit, applyTrims
+} from './utils/barcode'
 
 /* LS keys */
 const LS = {
@@ -280,10 +298,18 @@ const videoBox = ref<HTMLElement | null>(null)
 const videoTrack = ref<MediaStreamTrack | null>(null)
 const torchSupported = ref(false)
 const torchOn = ref(false)
-const cameraConstraints = computed<MediaTrackConstraints>(() => selectedDeviceId.value ? { deviceId: selectedDeviceId.value } : { facingMode: 'environment' })
-async function requestPermission(){ try{ const s = await navigator.mediaDevices.getUserMedia({ video: true }); s.getTracks().forEach(t=>t.stop()) }catch{} }
+
+const cameraConstraints = computed<MediaTrackConstraints>(
+  () => selectedDeviceId.value ? { deviceId: selectedDeviceId.value } : { facingMode: 'environment' }
+)
+async function requestPermission(){
+  try{ const s = await navigator.mediaDevices.getUserMedia({ video: true }); s.getTracks().forEach(t=>t.stop()) }catch{}
+}
 async function onCameraReady(){
-  try{ const list = await navigator.mediaDevices.enumerateDevices(); devices.value = list.filter(d=>d.kind==='videoinput') }catch{}
+  try{
+    const list = await navigator.mediaDevices.enumerateDevices()
+    devices.value = list.filter(d=>d.kind==='videoinput')
+  }catch{}
   await nextTick()
   try{
     const vid = videoBox.value?.querySelector('video') as HTMLVideoElement | null
@@ -314,15 +340,21 @@ const formatList: Format[] = [...ALL_FORMATS]
 const enabled = reactive<Record<Format, boolean>>(JSON.parse(localStorage.getItem(LS.enabled)||'{}') || {})
 formatList.forEach(f => { if (enabled[f] === undefined) enabled[f] = (f==='qr_code' || f==='code_128' || f==='ean_13' || f==='upc_a') })
 watch(enabled, () => localStorage.setItem(LS.enabled, JSON.stringify(enabled)), { deep:true })
+
 const trims = reactive<TrimRules>(Object.assign({}, DEFAULT_TRIMS, JSON.parse(localStorage.getItem(LS.trims)||'{}')))
 watch(trims, () => localStorage.setItem(LS.trims, JSON.stringify(trims)), { deep:true })
+
 const stripCD = ref(localStorage.getItem(LS.stripCD)==='1')
 const validateCD = ref(localStorage.getItem(LS.validateCD)==='1')
 const beep = ref(localStorage.getItem(LS.beep)!=='0')
 watch(stripCD, v => localStorage.setItem(LS.stripCD, v?'1':'0'))
 watch(validateCD, v => localStorage.setItem(LS.validateCD, v?'1':'0'))
 watch(beep, v => localStorage.setItem(LS.beep, v?'1':'0'))
-const activeFormats = computed(() => { const list = formatList.filter(f => enabled[f]); return list.length ? list : ['qr_code'] })
+
+const activeFormats = computed(() => {
+  const list = formatList.filter(f => enabled[f])
+  return list.length ? list : ['qr_code']
+})
 const linearOn = computed(() => LINEAR_GROUP.every(f => enabled[f]))
 const matrixOn = computed(() => MATRIX_GROUP.every(f => enabled[f]))
 function toggleLinear(e: Event){ const on = (e.target as HTMLInputElement).checked; LINEAR_GROUP.forEach(f => { enabled[f] = on }) }
@@ -342,10 +374,16 @@ watch(barcodeCol, v => localStorage.setItem(LS.barcodeCol, v))
 watch(descCol, v => localStorage.setItem(LS.descCol, v))
 const catalogEntries = computed<[string,string][]>(() => Array.from(catalog.entries()))
 watch(catalogEntries, arr => { localStorage.setItem(LS.catalog, JSON.stringify(arr)) }, { deep:true })
+
 function normalize(s:string){ return s.toLowerCase().replace(/[\s_\-]+/g,'').trim() }
 function guessCols(headers:string[]){
   const H = headers.slice()
-  const pri = [['barcode','barcodes'],['upc','upca','upce','upccode'],['ean','ean13','ean8','gtin','gtin13','gtin12','gtin14','gtin8'],['qrcode','qr'],['code128','code39','code93','datamatrix','aztec'],['code','productcode','bar_code','bar-code'],['sku','item','itemcode','productid','id']]
+  const pri = [
+    ['barcode','barcodes'], ['upc','upca','upce','upccode'],
+    ['ean','ean13','ean8','gtin','gtin13','gtin12','gtin14','gtin8'],
+    ['qrcode','qr'], ['code128','code39','code93','datamatrix','aztec'],
+    ['code','productcode','bar_code','bar-code'], ['sku','item','itemcode','productid','id']
+  ]
   const pick = (alts:string[]) => H.find(h => alts.includes(normalize(h)))
   barcodeCol.value = pick(pri.flat()) || H.find(h => /barcode/i.test(h)) || H[0] || ''
   descCol.value = H.find(h => /(description|desc|name|title)/i.test(h)) || ''
@@ -363,6 +401,7 @@ function rebuildCatalogFromSelections(){
   importStats.inserted = catalog.size
 }
 watch([barcodeCol, descCol], rebuildCatalogFromSelections)
+
 async function onFile(e:Event){
   const file = (e.target as HTMLInputElement).files?.[0]; if(!file) return
   const ext = file.name.split('.').pop()?.toLowerCase()
@@ -404,6 +443,7 @@ const builderEntries = computed<[string, {qty:number, desc?:string}][]>(() => Ar
 watch(quickEntries, arr => { localStorage.setItem(LS.quick, JSON.stringify(arr)) }, { deep:true })
 watch(verifyRows, arr => { localStorage.setItem(LS.verify, JSON.stringify(arr)) }, { deep:true })
 watch(builderEntries, arr => { localStorage.setItem(LS.builder, JSON.stringify(arr)) }, { deep:true })
+
 onMounted(() => {
   try{ const Q = JSON.parse(localStorage.getItem(LS.quick)||'[]') as [string,number][]; for(const [c,q] of Q) quickList.set(c,q) }catch{}
   try{ const V = JSON.parse(localStorage.getItem(LS.verify)||'[]') as {code:string,ok:boolean}[]; verifyRows.splice(0, verifyRows.length, ...(V||[])) }catch{}
@@ -413,12 +453,11 @@ onMounted(() => {
 })
 onBeforeUnmount(stopGuard)
 
-/* Live preview + guard (no decode/detect used) */
+/* Live preview + guard */
 type Detected = { boundingBox?: {x:number;y:number;width:number;height:number}; rawValue?: string; format?: string }
 const live = reactive<{ raw: string | null; fmt?: Format }>({ raw: null, fmt: undefined })
-
-let lastTrackAt = 0         /* updated every time paintTrack runs */
-let lastCodeAt  = 0         /* updated when paintTrack sees a code */
+let lastTrackAt = 0
+let lastCodeAt  = 0
 let guardId: number | undefined
 
 function startGuard(){
@@ -426,14 +465,10 @@ function startGuard(){
   guardId = window.setInterval(() => {
     if(!scanning.value) { clearPreview(); return }
     const now = performance.now()
-    /* if track paused or no code recently -> clear preview */
-    if ((now - lastTrackAt) > 600 || (now - lastCodeAt) > 350) {
-      clearPreview()
-    }
+    if ((now - lastTrackAt) > 600 || (now - lastCodeAt) > 350) clearPreview()
   }, 150)
 }
 function stopGuard(){ if(guardId){ clearInterval(guardId); guardId = undefined } }
-
 function clearPreview(){ live.raw = null; live.fmt = undefined }
 
 const previewCode = computed<string>(() => {
@@ -555,19 +590,37 @@ function playBeep(){
 </script>
 
 <style scoped>
-:root{ --overlayBg: rgba(0,0,0,.65); --overlayFg: #fff; }
+:root{
+  --overlayBg: rgba(0,0,0,.65);
+  --overlayFg: #fff;
+
+  /* column widths */
+  --qtyCol: 200px;
+  --statusCol: 96px;
+  --delCol: 56px;
+}
 .light{ --overlayBg: rgba(255,255,255,.8); --overlayFg: #000; }
+@media (max-width: 420px){
+  :root{ --qtyCol: 160px; --statusCol: 84px; }
+}
 
 .video{ position: relative; }
 :deep(canvas){ position:absolute; inset:0; z-index:3; }
 :deep(video){ position:relative; z-index:1; }
 
+/* Tables */
 .table{ width:100%; border-collapse:collapse; table-layout:fixed; }
 .table th,.table td{ padding:8px 10px; vertical-align:middle; }
+
+.table col.col-barcode{ width:auto; }
+.table col.col-qty{ width:var(--qtyCol); }
+.table col.col-status{ width:var(--statusCol); }
+.table col.col-del{ width:var(--delCol); }
+
 .barcode-col{ width:auto; }
 .barcode-text{
   display:inline-block;
-  min-width:20ch;
+  min-width:20ch;           /* ~20 characters visible when space allows */
   max-width:100%;
   white-space:nowrap;
   overflow:hidden;
