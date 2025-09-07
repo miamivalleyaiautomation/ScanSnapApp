@@ -54,7 +54,7 @@
         />
       </div>
 
-      <!-- Tap-to-add (enabled only when painter has a live code) -->
+      <!-- Tap-to-add (enabled only when preview has a code) -->
       <div class="row" style="margin-top:8px">
         <button class="btn" style="flex:1" :disabled="!canTap" @click="tapToAdd">{{ tapLabel }}</button>
       </div>
@@ -244,16 +244,11 @@
 
 <script setup lang="ts">
 import { QrcodeStream } from 'vue-qrcode-reader'
-import { ref, reactive, computed, watch, nextTick, onMounted } from 'vue'
+import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import { exportCSV, exportXLSX, exportPDF } from './utils/exporters'
-import {
-  ALL_FORMATS, DEFAULT_TRIMS,
-  LINEAR_GROUP, MATRIX_GROUP,
-  type Format, type TrimRules,
-  stripCheckDigit, validateCheckDigit, applyTrims
-} from './utils/barcode'
+import { ALL_FORMATS, DEFAULT_TRIMS, LINEAR_GROUP, MATRIX_GROUP, type Format, type TrimRules, stripCheckDigit, validateCheckDigit, applyTrims } from './utils/barcode'
 
 /* LS keys */
 const LS = {
@@ -285,10 +280,7 @@ const videoBox = ref<HTMLElement | null>(null)
 const videoTrack = ref<MediaStreamTrack | null>(null)
 const torchSupported = ref(false)
 const torchOn = ref(false)
-
-const cameraConstraints = computed<MediaTrackConstraints>(() =>
-  selectedDeviceId.value ? { deviceId: selectedDeviceId.value } : { facingMode: 'environment' }
-)
+const cameraConstraints = computed<MediaTrackConstraints>(() => selectedDeviceId.value ? { deviceId: selectedDeviceId.value } : { facingMode: 'environment' })
 async function requestPermission(){ try{ const s = await navigator.mediaDevices.getUserMedia({ video: true }); s.getTracks().forEach(t=>t.stop()) }catch{} }
 async function onCameraReady(){
   try{ const list = await navigator.mediaDevices.enumerateDevices(); devices.value = list.filter(d=>d.kind==='videoinput') }catch{}
@@ -417,11 +409,30 @@ onMounted(() => {
   try{ const V = JSON.parse(localStorage.getItem(LS.verify)||'[]') as {code:string,ok:boolean}[]; verifyRows.splice(0, verifyRows.length, ...(V||[])) }catch{}
   try{ const B = JSON.parse(localStorage.getItem(LS.builder)||'[]') as [string,{qty:number,desc?:string}][]; for(const [c,v] of B) builder.set(c,v) }catch{}
   try{ const C = JSON.parse(localStorage.getItem(LS.catalog)||'[]') as [string,string][]; catalog.clear(); for(const [c,d] of C) catalog.set(c,d) }catch{}
+  startGuard()
 })
+onBeforeUnmount(stopGuard)
 
-/* Live preview from painter (no timers) */
+/* Live preview + guard (no decode/detect used) */
 type Detected = { boundingBox?: {x:number;y:number;width:number;height:number}; rawValue?: string; format?: string }
 const live = reactive<{ raw: string | null; fmt?: Format }>({ raw: null, fmt: undefined })
+
+let lastTrackAt = 0         /* updated every time paintTrack runs */
+let lastCodeAt  = 0         /* updated when paintTrack sees a code */
+let guardId: number | undefined
+
+function startGuard(){
+  stopGuard()
+  guardId = window.setInterval(() => {
+    if(!scanning.value) { clearPreview(); return }
+    const now = performance.now()
+    /* if track paused or no code recently -> clear preview */
+    if ((now - lastTrackAt) > 600 || (now - lastCodeAt) > 350) {
+      clearPreview()
+    }
+  }, 150)
+}
+function stopGuard(){ if(guardId){ clearInterval(guardId); guardId = undefined } }
 
 function clearPreview(){ live.raw = null; live.fmt = undefined }
 
@@ -440,6 +451,7 @@ const canTap = computed(() => scanning.value && !!previewCode.value)
 const tapLabel = computed(() => previewCode.value ? `Tap to add ${previewCode.value}` : 'Tap to add')
 
 function paintTrack(codes: Detected[], ctx: CanvasRenderingContext2D) {
+  lastTrackAt = performance.now()
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
 
   let bestText: string | null = null
@@ -483,8 +495,7 @@ function paintTrack(codes: Detected[], ctx: CanvasRenderingContext2D) {
 
   if (bestText) {
     if (live.raw !== bestText) { live.raw = bestText; live.fmt = bestFmt }
-  } else {
-    if (live.raw !== null) { clearPreview() }
+    lastCodeAt = lastTrackAt
   }
 }
 
@@ -551,7 +562,6 @@ function playBeep(){
 :deep(canvas){ position:absolute; inset:0; z-index:3; }
 :deep(video){ position:relative; z-index:1; }
 
-/* Tables */
 .table{ width:100%; border-collapse:collapse; table-layout:fixed; }
 .table th,.table td{ padding:8px 10px; vertical-align:middle; }
 .barcode-col{ width:auto; }
@@ -570,7 +580,6 @@ function playBeep(){
 .center{ text-align:center; }
 .right{ text-align:right; }
 
-/* Toast above video */
 .toast{
   position:absolute;
   left:50%; bottom:10px; transform:translateX(-50%);
