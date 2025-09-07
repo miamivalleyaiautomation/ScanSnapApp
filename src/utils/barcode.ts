@@ -1,5 +1,5 @@
 // FILE: src/utils/barcode.ts
-// Removed: codabar, databar, databar_limited, databar_expanded, itf, maxi_code, pdf417
+// Removed: codabar, databar*, itf, maxi_code, pdf417, dx_film_edge
 
 export type Format =
   | 'aztec'
@@ -7,7 +7,6 @@ export type Format =
   | 'code_39'
   | 'code_93'
   | 'data_matrix'
-  | 'dx_film_edge'
   | 'ean_13'
   | 'ean_8'
   | 'micro_qr_code'
@@ -22,17 +21,16 @@ export const ALL_FORMATS: Format[] = [
   'code_39',
   'code_93',
   'data_matrix',
-  'dx_film_edge',
   'ean_13',
   'ean_8',
   'micro_qr_code',
   'qr_code',
   'rm_qr_code',
   'upc_a',
-  'upc_e'
+  'upc_e',
 ]
 
-// Linear = 1D barcodes that remain
+// 1D barcodes that remain
 export const LINEAR_GROUP: Format[] = [
   'code_128',
   'code_39',
@@ -41,24 +39,25 @@ export const LINEAR_GROUP: Format[] = [
   'ean_8',
   'upc_a',
   'upc_e',
-  'dx_film_edge'
 ]
 
-// Matrix = 2D barcodes that remain
+// 2D barcodes that remain
 export const MATRIX_GROUP: Format[] = [
   'qr_code',
   'micro_qr_code',
   'rm_qr_code',
   'data_matrix',
-  'aztec'
+  'aztec',
 ]
 
 export type TrimRules = Record<Format, { prefix: number; suffix: number }>
 
-export const DEFAULT_TRIMS: TrimRules = ALL_FORMATS
-  .reduce((acc, f) => { acc[f] = { prefix: 0, suffix: 0 }; return acc }, {} as TrimRules)
+export const DEFAULT_TRIMS: TrimRules = ALL_FORMATS.reduce((acc, f) => {
+  acc[f] = { prefix: 0, suffix: 0 }
+  return acc
+}, {} as TrimRules)
 
-// Typical retail defaults
+// Retail-friendly defaults
 DEFAULT_TRIMS.ean_13 = { prefix: 1, suffix: 1 }
 DEFAULT_TRIMS.upc_a  = { prefix: 1, suffix: 1 }
 DEFAULT_TRIMS.upc_e  = { prefix: 1, suffix: 1 }
@@ -66,6 +65,7 @@ DEFAULT_TRIMS.ean_8  = { prefix: 0, suffix: 0 }
 
 /* ---------- EAN/UPC helpers ---------- */
 export function computeEAN13CheckDigit(code12: string): number {
+  // Why: EAN-13/UPC-A share weights 1/3 alternating.
   const a = code12.padStart(12, '0').split('').map(Number)
   const sum = a.reduce((acc, d, i) => acc + d * (i % 2 === 0 ? 1 : 3), 0)
   const mod = sum % 10
