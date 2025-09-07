@@ -140,13 +140,12 @@
       <h3 style="margin-top:2px">Import Catalog</h3>
       <div class="row">
         <input class="input" type="file" accept=".csv,.xls,.xlsx" @change="onFile">
-        <!-- NEW: barcode-only search -->
         <input class="input" v-model="searchBarcode" placeholder="Search barcode...">
-        <!-- Keep general search (desc or code) -->
         <input class="input" v-model="search" placeholder="Search description or barcode...">
         <div class="kbd">{{ catalog.size }} items</div>
         <button class="btn warn" style="margin-left:auto" @click="clearCatalog">Clear Catalog</button>
       </div>
+
       <div v-if="columns.length" class="row" style="margin-top:10px">
         <div>Barcode column:</div>
         <select class="input" v-model="barcodeCol">
@@ -158,6 +157,15 @@
           <option v-for="c in columns" :key="c" :value="c">{{ c }}</option>
         </select>
       </div>
+
+      <!-- Import stats -->
+      <div class="mini" v-if="importStats.total">
+        <span class="kbd">Rows: {{ importStats.total }}</span>
+        <span class="kbd">Inserted: {{ importStats.inserted }}</span>
+        <span class="kbd">Blank barcodes: {{ importStats.blank }}</span>
+        <span class="kbd">Duplicates collapsed: {{ importStats.duplicates }}</span>
+      </div>
+
       <table class="table">
         <thead><tr><th>Barcode</th><th>Description</th></tr></thead>
         <tbody>
@@ -178,12 +186,10 @@
       </div>
 
       <h3>Scanner Formats</h3>
-      <!-- Row 1: Enable/Disable -->
       <div class="row nowrap" style="margin-bottom:6px">
         <button class="btn ghost" @click="enableAll">Enable all</button>
         <button class="btn ghost" @click="disableAll">Disable all</button>
       </div>
-      <!-- Row 2: Linear/Matrix -->
       <div class="row nowrap" style="margin-bottom:8px">
         <label class="kbd no-wrap"><input type="checkbox" :checked="linearOn" @change="toggleLinear($event)"> linear_codes</label>
         <label class="kbd no-wrap"><input type="checkbox" :checked="matrixOn" @change="toggleMatrix($event)"> matrix_codes</label>
@@ -192,7 +198,7 @@
       <table class="table setup">
         <thead>
           <tr>
-            <th>Format</th>
+            <th>Format</</th>
             <th>Trim Prefix</th>
             <th>Trim Suffix</th>
             <th class="center">Enabled</th>
@@ -288,36 +294,58 @@ function toggleMatrix(e: Event){
 function enableAll(){ formatList.forEach(f => enabled[f] = true) }
 function disableAll(){ formatList.forEach(f => enabled[f] = false) }
 
-/* Catalog data */
+/* ---------- Catalog data ---------- */
+const rawRows = ref<Record<string, unknown>[]>([])  // keep full source rows
 const catalog = reactive(new Map<string,string>())
-const search = ref('')           // general search: code or description
-const searchBarcode = ref('')    // NEW: barcode-only search
+const search = ref('')           // general search
+const searchBarcode = ref('')    // barcode-only search
 const columns = ref<string[]>([])
 const barcodeCol = ref<string>('')
 const descCol = ref<string>('')
 
-const filteredCatalog = computed(() => {
-  // Build full list, then filter (no 1000-row cap)
-  const rows: {barcode:string, description:string}[] = []
-  const qCode = searchBarcode.value.trim()
-  const qAny = search.value.trim().toLowerCase()
+const importStats = reactive({ total: 0, inserted: 0, blank: 0, duplicates: 0 })
 
-  for (const [code, desc] of catalog) {
-    if (qCode) {
-      if (code.includes(qCode)) rows.push({ barcode: code, description: desc })
-    } else if (qAny) {
-      if (code.toLowerCase().includes(qAny) || (desc||'').toLowerCase().includes(qAny))
-        rows.push({ barcode: code, description: desc })
-    } else {
-      rows.push({ barcode: code, description: desc })
-    }
-  }
-  return rows
-})
-function guessCols(h: string[]){
-  barcodeCol.value = h.find(c => /^(barcode|code|upc|ean|sku)$/i.test(c)) || h[0]
-  descCol.value = h.find(c => /(desc|name|title)/i.test(c)) || ''
+function normalize(s: string){ return s.toLowerCase().replace(/[\s_\-]+/g,'').trim() }
+
+/* Prefer true barcode columns over SKU/Code */
+function guessCols(headers: string[]){
+  const H = headers.slice()
+  // Priority groups (first match wins, left→right)
+  const pri = [
+    ['barcode','barcodes'],
+    ['upc','upca','upce','upccode'],
+    ['ean','ean13','ean8','gtin','gtin13','gtin12','gtin14','gtin8'],
+    ['qrcode','qr'],
+    ['code128','code39','code93','datamatrix','aztec'],
+    ['code','productcode','bar_code','bar-code'],
+    ['sku','item','itemcode','productid','id'],
+  ]
+  const pick = (alts: string[]) => H.find(h => alts.includes(normalize(h)))
+  const bGuess = pick(pri.flat()) || H.find(h => /barcode/i.test(h)) || H[0]
+  const dGuess = H.find(h => /(description|desc|name|title)/i.test(h)) || ''
+  barcodeCol.value = bGuess
+  descCol.value = dGuess
 }
+
+function rebuildCatalogFromSelections(){
+  catalog.clear()
+  importStats.total = rawRows.value.length
+  importStats.inserted = 0
+  importStats.blank = 0
+  importStats.duplicates = 0
+
+  const seen = new Set<string>()
+  for(const r of rawRows.value){
+    const code = String((r as any)[barcodeCol.value] ?? '').trim()
+    if(!code){ importStats.blank++; continue }
+    const desc = descCol.value ? String((r as any)[descCol.value] ?? '').trim() : ''
+    if(seen.has(code)){ importStats.duplicates++; } else { seen.add(code) }
+    catalog.set(code, desc)
+  }
+  importStats.inserted = catalog.size
+}
+
+watch([barcodeCol, descCol], rebuildCatalogFromSelections)
 
 /* File input: CSV/XLS/XLSX */
 async function onFile(e: Event){
@@ -326,12 +354,11 @@ async function onFile(e: Event){
   let rows: Record<string, unknown>[] = []
 
   if(ext === 'csv'){
-    // Import ALL rows; be generous about empty lines
     rows = await new Promise<Record<string, unknown>[]>((res, rej)=>{
       Papa.parse<Record<string, unknown>>(file, {
         header: true,
         skipEmptyLines: 'greedy',
-        dynamicTyping: false,
+        dynamicTyping: false, // keep barcodes as-is (strings)
         complete: r => res(r.data as Record<string, unknown>[]),
         error: rej
       })
@@ -342,52 +369,62 @@ async function onFile(e: Event){
     const ws = wb.Sheets[wb.SheetNames[0]]
     rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
       raw: false,
-      defval: '',       // keep empty cells
+      defval: '',
       blankrows: false
     })
   }
 
-  if(!rows.length) return
+  rawRows.value = rows
   const headers = Object.keys(rows[0] ?? {})
   columns.value = headers
   guessCols(headers)
-
-  catalog.clear()
-  for(const r of rows){
-    const code = String((r as any)[barcodeCol.value] ?? '').trim()
-    if(!code) continue
-    const desc = descCol.value ? String((r as any)[descCol.value] ?? '').trim() : ''
-    catalog.set(code, desc)
-  }
+  rebuildCatalogFromSelections()
 }
 
+/* Filtering */
+const filteredCatalog = computed(() => {
+  const qCode = searchBarcode.value.trim()
+  const qAny = search.value.trim().toLowerCase()
+  const out: {barcode:string, description:string}[] = []
+  for (const [code, desc] of catalog) {
+    if (qCode) {
+      if (code.includes(qCode)) out.push({ barcode: code, description: desc })
+    } else if (qAny) {
+      if (code.toLowerCase().includes(qAny) || (desc||'').toLowerCase().includes(qAny))
+        out.push({ barcode: code, description: desc })
+    } else {
+      out.push({ barcode: code, description: desc })
+    }
+  }
+  return out
+})
+
 function clearCatalog(){
+  rawRows.value = []
   catalog.clear()
   columns.value = []
   barcodeCol.value = ''
   descCol.value = ''
   search.value = ''
   searchBarcode.value = ''
+  importStats.total = 0
+  importStats.inserted = 0
+  importStats.blank = 0
+  importStats.duplicates = 0
 }
 
-/* Mode state */
+/* ---- Mode state ---- */
 const quickList = reactive(new Map<string, number>())
 const verifyRows = reactive<{code:string, ok:boolean}[]>([])
 const builder = reactive(new Map<string, {qty:number, desc?:string}>())
 const knownCount = computed(() => verifyRows.filter(r=>r.ok).length)
 const unknownCount = computed(() => verifyRows.filter(r=>!r.ok).length)
 const builderRows = computed(() => [...builder.entries()].map(([code, v]) => ({ code, qty:v.qty, desc:v.desc || catalog.get(code) || '' })))
-
 const last = reactive<{code:string|null, qty:number}>({ code:null, qty:0 })
 
-/* Detect handler */
+/* ---- Scanning ---- */
 let lastAt = 0
-function throttle(): boolean {
-  const now = Date.now()
-  if(now - lastAt < 300) return true
-  lastAt = now
-  return false
-}
+function throttle(): boolean { const now = Date.now(); if(now - lastAt < 300) return true; lastAt = now; return false }
 function onDetect(payload: any){
   const first = (payload as any[])[0]
   const text = String(first?.rawValue ?? '').trim()
@@ -395,7 +432,6 @@ function onDetect(payload: any){
   if(!text || throttle()) return
   processScan(text, fmt)
 }
-
 function processScan(raw: string, fmt?: Format){
   let code = raw
   if(fmt){
@@ -426,7 +462,6 @@ function processScan(raw: string, fmt?: Format){
   paused.value = true
   setTimeout(() => { paused.value = false }, 180)
 }
-
 function onError(err:any){ console.warn(err) }
 function setLast(code:string, qty:number){ last.code = code; last.qty = qty }
 function incLast(){ if(!last.code) return; if(mode.value==='quick'){ changeQty('quick', last.code, +1) } else { changeQty('builder', last.code, +1) } }
