@@ -189,3 +189,65 @@ body{
 }
 
 /* --- Camera & tables ... (keep the rest of your existing CSS below as-is) --- */
+/* ===== Order Builder visibility/wrapping fixes ===== */
+.mode-order table {
+  table-layout: fixed; /* predictable widths on mobile */
+}
+
+/* First column takes all remaining space, wraps; Qty column stays compact */
+.mode-order thead th:first-child,
+.mode-order tbody td:first-child {
+  width: auto;
+}
+.mode-order thead th:last-child,
+.mode-order tbody td:last-child {
+  width: 1%;
+  white-space: nowrap;
+}
+
+/* Show full barcode + description (no ellipsis) */
+.mode-order td .item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  line-height: 1.2;
+}
+
+.mode-order td .item .code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  word-break: break-word;          /* wrap long numeric strings */
+}
+
+.mode-order td .item .desc {
+  font-size: 0.95rem;
+  color: var(--muted-2, #98a2b3);
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  word-break: break-word;
+}
+
+/* Keep qty controls compact and centered vertically in the row */
+.mode-order .qty-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* If any global ".truncate" or "two-line" styles exist, neutralize them here */
+.mode-order .truncate,
+.mode-order .two-line,
+.mode-order .mono-wrap {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  -webkit-line-clamp: initial !important;
+  -webkit-box-orient: initial !important;
+  max-width: none !important;
+}
