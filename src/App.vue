@@ -22,7 +22,7 @@
       <button class="tab" :class="{active:tab==='setup'}" @click="tab='setup'">SETUP</button>
     </div>
 
-    <!-- SCAN TAB -->
+    <!-- SCAN -->
     <div v-if="tab==='scan'" class="panel">
       <div class="row nowrap" style="margin-bottom:8px">
         <button class="btn" style="flex:1" @click="toggleCamera">{{ scanning ? 'Stop Camera' : 'Start Camera' }}</button>
@@ -35,7 +35,7 @@
         </select>
       </div>
 
-      <!-- Live camera -->
+      <!-- Camera -->
       <div class="video" ref="videoBox">
         <button
           v-if="scanning && torchSupported"
@@ -56,7 +56,7 @@
         />
       </div>
 
-      <!-- Tap to add -->
+      <!-- Tap-to-add -->
       <div class="row" style="margin-top:8px">
         <button class="btn" style="flex:1" :disabled="!canTap" @click="tapToAdd">{{ tapLabel }}</button>
       </div>
@@ -143,44 +143,37 @@
         </div>
       </div>
 
-      <!-- ORDER BUILDER (2-row layout: desc spans full width) -->
+      <!-- ORDER BUILDER (editable description under barcode, default "unknown") -->
       <div v-if="mode==='builder'">
-        <table class="table builder-table">
+        <table class="table">
           <colgroup>
             <col class="col-barcode" />
             <col class="col-qty" />
           </colgroup>
           <thead><tr><th>Barcode / Description</th><th class="right">QTY</th></tr></thead>
           <tbody>
-            <template v-for="row in builderRows" :key="row.code">
-              <!-- main row -->
-              <tr :key="row.code + '-main'">
-                <td class="barcode-col">
-                  <div class="barcode-text" style="font-weight:700">{{ row.code }}</div>
-                </td>
-                <td class="qty-cell">
-                  <div class="qty-pack">
-                    <div class="qty-wrap">
-                      <button class="icon-btn" @click="changeQty('builder', row.code, -1)">−</button>
-                      <span class="qty-num">{{ row.qty }}</span>
-                      <button class="icon-btn" @click="changeQty('builder', row.code, +1)">＋</button>
-                    </div>
-                    <button class="icon-btn" @click="removeItem('builder', row.code)" aria-label="Delete">✖</button>
+            <tr v-for="row in builderRows" :key="row.code">
+              <td class="barcode-col">
+                <div class="barcode-text" style="font-weight:700">{{ row.code }}</div>
+                <input
+                  class="input input-compact ellipsis"
+                  :value="row.desc"
+                  @input="setBuilderDesc(row.code, ($event.target as HTMLInputElement).value)"
+                  placeholder="unknown"
+                  style="width:100%; margin-top:2px"
+                />
+              </td>
+              <td class="qty-cell">
+                <div class="qty-pack">
+                  <div class="qty-wrap">
+                    <button class="icon-btn" @click="changeQty('builder', row.code, -1)">−</button>
+                    <span class="qty-num">{{ row.qty }}</span>
+                    <button class="icon-btn" @click="changeQty('builder', row.code, +1)">＋</button>
                   </div>
-                </td>
-              </tr>
-              <!-- description row (spans across to the delete column) -->
-              <tr class="desc-row" :key="row.code + '-desc'">
-                <td :colspan="2">
-                  <input
-                    class="input desc-input wide"
-                    :value="row.desc"
-                    @input="setBuilderDesc(row.code, ($event.target as HTMLInputElement).value)"
-                    placeholder="unknown"
-                  />
-                </td>
-              </tr>
-            </template>
+                  <button class="icon-btn" @click="removeItem('builder', row.code)" aria-label="Delete">✖</button>
+                </div>
+              </td>
+            </tr>
           </tbody>
         </table>
         <div class="row" style="margin-top:10px">
@@ -192,7 +185,7 @@
       </div>
     </div>
 
-    <!-- CATALOG TAB -->
+    <!-- CATALOG -->
     <div v-else-if="tab==='catalog'" class="panel">
       <h3 style="margin-top:2px">Import Catalog</h3>
       <div class="row">
@@ -202,6 +195,7 @@
         <div class="kbd">{{ catalog.size }} items</div>
         <button class="btn warn" style="margin-left:auto" @click="clearCatalog">Clear Catalog</button>
       </div>
+
       <div v-if="columns.length" class="row" style="margin-top:10px">
         <div>Barcode column:</div>
         <select class="input" v-model="barcodeCol">
@@ -213,12 +207,14 @@
           <option v-for="c in columns" :key="c" :value="c">{{ c }}</option>
         </select>
       </div>
+
       <div class="mini" v-if="importStats.total">
         <span class="kbd">Rows: {{ importStats.total }}</span>
         <span class="kbd">Inserted: {{ importStats.inserted }}</span>
         <span class="kbd">Blank barcodes: {{ importStats.blank }}</span>
         <span class="kbd">Duplicates collapsed: {{ importStats.duplicates }}</span>
       </div>
+
       <table class="table catalog">
         <colgroup><col class="col-barcode" /><col /></colgroup>
         <thead><tr><th class="barcode">Barcode</th><th class="desc">Description</th></tr></thead>
@@ -231,7 +227,7 @@
       </table>
     </div>
 
-    <!-- SETUP TAB -->
+    <!-- SETUP -->
     <div v-else class="panel">
       <h3>Checks & Trims</h3>
       <div class="row" style="margin-bottom:10px">
@@ -291,7 +287,10 @@ const LS = {
 
 /* Theme */
 const isDark = ref(!(localStorage.getItem(LS.theme) === 'light'))
-watch(isDark, v => { document.documentElement.classList.toggle('light', !v); localStorage.setItem(LS.theme, v?'dark':'light') })
+watch(isDark, v => {
+  document.documentElement.classList.toggle('light', !v)
+  localStorage.setItem(LS.theme, v ? 'dark' : 'light')
+})
 document.documentElement.classList.toggle('light', !isDark.value)
 function toggleTheme(){ isDark.value = !isDark.value }
 
@@ -311,10 +310,15 @@ const videoTrack = ref<MediaStreamTrack | null>(null)
 const torchSupported = ref(false)
 const torchOn = ref(false)
 
-const cameraConstraints = computed<MediaTrackConstraints>(() =>
-  selectedDeviceId.value ? { deviceId: selectedDeviceId.value } : { facingMode: 'environment' }
+const cameraConstraints = computed<MediaTrackConstraints>(
+  () => selectedDeviceId.value ? { deviceId: selectedDeviceId.value } : { facingMode: 'environment' }
 )
-async function requestPermission(){ try{ const s = await navigator.mediaDevices.getUserMedia({ video: true }); s.getTracks().forEach(t=>t.stop()) }catch{} }
+async function requestPermission(){
+  try{
+    const s = await navigator.mediaDevices.getUserMedia({ video: true })
+    s.getTracks().forEach(t=>t.stop())
+  }catch{}
+}
 async function onCameraReady(){
   try{
     const list = await navigator.mediaDevices.enumerateDevices()
@@ -326,13 +330,25 @@ async function onCameraReady(){
     const track = (vid?.srcObject as MediaStream | undefined)?.getVideoTracks?.()[0] || null
     videoTrack.value = track || null
     torchSupported.value = !!(track && typeof track.getCapabilities === 'function' && (track.getCapabilities as any)().torch !== undefined)
-  }catch{ torchSupported.value = false }
+  }catch{
+    torchSupported.value = false
+  }
 }
-function onDeviceChange(){ if(scanning.value){ scanning.value=false; setTimeout(()=>{ scanning.value=true; torchOn.value=false },0) } }
+function onDeviceChange(){
+  if(scanning.value){
+    scanning.value=false
+    setTimeout(()=>{
+      scanning.value=true
+      torchOn.value=false
+    }, 0)
+  }
+}
 function toggleCamera(){
   if(scanning.value){
     scanning.value=false
-    if(videoTrack.value){ try{ (videoTrack.value as any).applyConstraints?.({ advanced:[{ torch:false }] }) }catch{} }
+    if(videoTrack.value){
+      try{ (videoTrack.value as any).applyConstraints?.({ advanced:[{ torch:false }] }) }catch{}
+    }
     torchOn.value=false
     clearPreview()
   }else{
@@ -342,13 +358,20 @@ function toggleCamera(){
 async function toggleTorch(){
   if(!videoTrack.value) return
   const want = !torchOn.value
-  try{ await (videoTrack.value as any).applyConstraints?.({ advanced:[{ torch: want }] }); torchOn.value = want }catch{ torchOn.value = false }
+  try{
+    await (videoTrack.value as any).applyConstraints?.({ advanced:[{ torch: want }] })
+    torchOn.value = want
+  }catch{
+    torchOn.value = false
+  }
 }
 
-/* Setup: formats, trims, checks */
+/* Setup */
 const formatList: Format[] = [...ALL_FORMATS]
 const enabled = reactive<Record<Format, boolean>>(JSON.parse(localStorage.getItem(LS.enabled)||'{}') || {})
-formatList.forEach(f => { if (enabled[f] === undefined) enabled[f] = (f==='qr_code' || f==='code_128' || f==='ean_13' || f==='upc_a') })
+formatList.forEach(f => {
+  if (enabled[f] === undefined) enabled[f] = (f==='qr_code' || f==='code_128' || f==='ean_13' || f==='upc_a')
+})
 watch(enabled, () => localStorage.setItem(LS.enabled, JSON.stringify(enabled)), { deep:true })
 
 const trims = reactive<TrimRules>(Object.assign({}, DEFAULT_TRIMS, JSON.parse(localStorage.getItem(LS.trims)||'{}')))
@@ -361,72 +384,96 @@ watch(stripCD, v => localStorage.setItem(LS.stripCD, v?'1':'0'))
 watch(validateCD, v => localStorage.setItem(LS.validateCD, v?'1':'0'))
 watch(beep, v => localStorage.setItem(LS.beep, v?'1':'0'))
 
-/* Active formats for the camera */
 const activeFormats = computed(() => {
   const list = formatList.filter(f => enabled[f])
   return list.length ? list : ['qr_code']
 })
-
-/* Group toggles */
 const linearOn = computed(() => LINEAR_GROUP.every(f => enabled[f]))
 const matrixOn = computed(() => MATRIX_GROUP.every(f => enabled[f]))
-function toggleLinear(e: Event){ const on = (e.target as HTMLInputElement).checked; LINEAR_GROUP.forEach(f => enabled[f] = on) }
-function toggleMatrix(e: Event){ const on = (e.target as HTMLInputElement).checked; MATRIX_GROUP.forEach(f => enabled[f] = on) }
-function enableAll(){ formatList.forEach(f => enabled[f] = true) }
-function disableAll(){ formatList.forEach(f => enabled[f] = false) }
-function clearAllTrims(){ for (const f of formatList){ trims[f].prefix = 0; trims[f].suffix = 0 } }
+function toggleLinear(e: Event){
+  const on = (e.target as HTMLInputElement).checked
+  LINEAR_GROUP.forEach(f => { enabled[f] = on })
+}
+function toggleMatrix(e: Event){
+  const on = (e.target as HTMLInputElement).checked
+  MATRIX_GROUP.forEach(f => { enabled[f] = on })
+}
+function enableAll(){ formatList.forEach(f => { enabled[f] = true }) }
+function disableAll(){ formatList.forEach(f => { enabled[f] = false }) }
+function clearAllTrims(){
+  for (const f of formatList){
+    trims[f].prefix = 0
+    trims[f].suffix = 0
+  }
+}
 
-/* Catalog data */
+/* Catalog */
 const catalog = reactive(new Map<string,string>())
 const rawRows = ref<Record<string, unknown>[]>([])
 const columns = ref<string[]>([])
 const barcodeCol = ref<string>(localStorage.getItem(LS.barcodeCol) || '')
 const descCol = ref<string>(localStorage.getItem(LS.descCol) || '')
-const search = ref(''); const searchBarcode = ref('')
+const search = ref('')
+const searchBarcode = ref('')
 const importStats = reactive({ total:0, inserted:0, blank:0, duplicates:0 })
+
 watch(barcodeCol, v => localStorage.setItem(LS.barcodeCol, v))
 watch(descCol, v => localStorage.setItem(LS.descCol, v))
 const catalogEntries = computed<[string,string][]>(() => Array.from(catalog.entries()))
 watch(catalogEntries, arr => { localStorage.setItem(LS.catalog, JSON.stringify(arr)) }, { deep:true })
 
 function normalize(s:string){ return s.toLowerCase().replace(/[\s_\-]+/g,'').trim() }
-function guessCols(h: string[]){
-  const H = h.slice()
-  const pri = [['barcode','barcodes'],['upc','upca','upce','upccode'],['ean','ean13','ean8','gtin','gtin12','gtin13','gtin14','gtin8'],['code','productcode','bar_code','bar-code'],['sku','item','itemcode','productid','id']]
-  const pick = (alts:string[]) => H.find(x => alts.includes(normalize(x)))
-  barcodeCol.value = pick(pri.flat()) || H.find(x => /barcode/i.test(x)) || H[0] || ''
-  descCol.value = H.find(x => /(description|desc|name|title)/i.test(x)) || ''
+function guessCols(headers:string[]){
+  const H = headers.slice()
+  const pri = [
+    ['barcode','barcodes'], ['upc','upca','upce','upccode'],
+    ['ean','ean13','ean8','gtin','gtin13','gtin12','gtin14','gtin8'],
+    ['qrcode','qr'], ['code128','code39','code93','datamatrix','aztec'],
+    ['code','productcode','bar_code','bar-code'], ['sku','item','itemcode','productid','id']
+  ]
+  const pick = (alts:string[]) => H.find(h => alts.includes(normalize(h)))
+  barcodeCol.value = pick(pri.flat()) || H.find(h => /barcode/i.test(h)) || H[0] || ''
+  descCol.value = H.find(h => /(description|desc|name|title)/i.test(h)) || ''
 }
 function rebuildCatalogFromSelections(){
   catalog.clear()
-  importStats.total = rawRows.value.length; importStats.inserted = 0; importStats.blank = 0; importStats.duplicates = 0
+  importStats.total = rawRows.value.length
+  importStats.inserted = 0
+  importStats.blank = 0
+  importStats.duplicates = 0
+
   const seen = new Set<string>()
   for (const r of rawRows.value){
     const code = String((r as any)[barcodeCol.value] ?? '').trim()
     if(!code){ importStats.blank++; continue }
     const desc = descCol.value ? String((r as any)[descCol.value] ?? '').trim() : ''
-    if(seen.has(code)) importStats.duplicates++; else seen.add(code)
+    if(seen.has(code)){ importStats.duplicates++ } else { seen.add(code) }
     catalog.set(code, desc)
   }
   importStats.inserted = catalog.size
 }
 watch([barcodeCol, descCol], rebuildCatalogFromSelections)
-async function onFile(e: Event){
-  const file = (e.target as HTMLInputElement).files?.[0]; if(!file) return
+
+async function onFile(e:Event){
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if(!file) return
   const ext = file.name.split('.').pop()?.toLowerCase()
   let rows: Record<string, unknown>[] = []
   if(ext === 'csv'){
     rows = await new Promise<Record<string, unknown>[]>((res, rej)=>{
-      Papa.parse<Record<string, unknown>>(file, { header:true, skipEmptyLines:'greedy', dynamicTyping:false, complete: r => res(r.data as any[]), error: rej })
+      Papa.parse<Record<string, unknown>>(file, {
+        header:true, skipEmptyLines:'greedy', dynamicTyping:false,
+        complete: r => res(r.data as Record<string, unknown>[]), error: rej
+      })
     })
-  }else{
+  } else {
     const data = await file.arrayBuffer()
     const wb = XLSX.read(data, { type:'array' })
     const ws = wb.Sheets[wb.SheetNames[0]]
     rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { raw:false, defval:'', blankrows:false })
   }
   rawRows.value = rows
-  const headers = Object.keys(rows[0] as object || {})
+  const headers = Object.keys(rows[0] ?? {})
   columns.value = headers
   guessCols(headers)
   rebuildCatalogFromSelections()
@@ -436,40 +483,38 @@ const filteredCatalog = computed(() => {
   const qAny = search.value.trim().toLowerCase()
   const out: {barcode:string, description:string}[] = []
   for (const [code, desc] of catalog){
-    if(qCode){
-      if(code.includes(qCode)) out.push({ barcode: code, description: desc })
-    }else if(qAny){
-      if(code.toLowerCase().includes(qAny) || (desc||'').toLowerCase().includes(qAny)) out.push({ barcode: code, description: desc })
-    }else{
+    if (qCode){
+      if (code.includes(qCode)) out.push({ barcode: code, description: desc })
+    } else if (qAny){
+      if (code.toLowerCase().includes(qAny) || (desc||'').toLowerCase().includes(qAny))
+        out.push({ barcode: code, description: desc })
+    } else {
       out.push({ barcode: code, description: desc })
     }
   }
   return out
 })
 function clearCatalog(){
-  rawRows.value = []; catalog.clear(); columns.value = []
-  barcodeCol.value=''; descCol.value=''; search.value=''; searchBarcode.value=''
+  rawRows.value = []
+  catalog.clear()
+  columns.value = []
+  barcodeCol.value = ''
+  descCol.value = ''
+  search.value = ''
+  searchBarcode.value = ''
   importStats.total = importStats.inserted = importStats.blank = importStats.duplicates = 0
   localStorage.removeItem(LS.catalog)
 }
 
-/* Mode state */
+/* Lists + persistence */
 const quickList = reactive(new Map<string, number>())
 const verifyRows = reactive<{code:string, ok:boolean}[]>([])
 const builder = reactive(new Map<string, {qty:number, desc?:string}>())
 const quickEntries = computed<[string, number][]>(() => Array.from(quickList.entries()))
 const builderEntries = computed<[string, {qty:number, desc?:string}][]>(() => Array.from(builder.entries()))
-const knownCount = computed(() => verifyRows.filter(r=>r.ok).length)
-const unknownCount = computed(() => verifyRows.filter(r=>!r.ok).length)
 watch(quickEntries, arr => { localStorage.setItem(LS.quick, JSON.stringify(arr)) }, { deep:true })
 watch(verifyRows, arr => { localStorage.setItem(LS.verify, JSON.stringify(arr)) }, { deep:true })
 watch(builderEntries, arr => { localStorage.setItem(LS.builder, JSON.stringify(arr)) }, { deep:true })
-
-const builderRows = computed(() =>
-  [...builder.entries()].map(([code, v]) => ({ code, qty:v.qty, desc: (v.desc && v.desc.trim() !== '') ? v.desc : 'unknown' }))
-)
-
-const last = reactive<{code:string|null, qty:number}>({ code:null, qty:0 })
 
 onMounted(() => {
   try{ const Q = JSON.parse(localStorage.getItem(LS.quick)||'[]') as [string,number][]; for(const [c,q] of Q) quickList.set(c,q) }catch{}
@@ -490,7 +535,10 @@ let guardId: number | undefined
 function startGuard(){
   stopGuard()
   guardId = window.setInterval(() => {
-    if(!scanning.value){ clearPreview(); return }
+    if(!scanning.value) {
+      clearPreview()
+      return
+    }
     const now = performance.now()
     if ((now - lastTrackAt) > 600 || (now - lastCodeAt) > 350) clearPreview()
   }, 150)
@@ -569,7 +617,18 @@ function paintTrack(codes: Detected[], ctx: CanvasRenderingContext2D) {
   }
 }
 
-/* Commit, controls, exports */
+/* Commit + exports + controls */
+const knownCount = computed(() => verifyRows.filter(r=>r.ok).length)
+const unknownCount = computed(() => verifyRows.filter(r=>!r.ok).length)
+const builderRows = computed(() =>
+  [...builder.entries()].map(([code, v]) => ({
+    code,
+    qty: v.qty,
+    desc: (v.desc && v.desc.trim() !== '') ? v.desc : 'unknown'
+  }))
+)
+const last = reactive<{code:string|null, qty:number}>({ code:null, qty:0 })
+
 function tapToAdd(){
   const code = previewCode.value
   if(!code) return
@@ -583,13 +642,24 @@ function commitCode(code:string){
     setLast(code, quickList.get(code) as number)
   } else if(mode.value==='verify'){
     const ok = catalog.has(code)
-    const i = verifyRows.findIndex(r=>r.code===code)
-    if(i>=0) verifyRows[i] = { code, ok }; else verifyRows.push({ code, ok })
+    const i = verifyRows.findIndex(r => r.code === code)
+    if (i >= 0) {
+      verifyRows[i] = { code, ok }
+    } else {
+      verifyRows.push({ code, ok })
+    }
     setLast(code, 1)
   } else {
     const ex = builder.get(code)
-    if(ex){ ex.qty += 1; builder.set(code, ex); setLast(code, ex.qty) }
-    else { builder.set(code, { qty:1, desc: catalog.get(code) || 'unknown' }); setLast(code, 1) }
+    if (ex){
+      ex.qty += 1
+      builder.set(code, ex)
+      setLast(code, ex.qty)
+    } else {
+      const initialDesc = catalog.get(code) || 'unknown'  // ← default
+      builder.set(code, { qty: 1, desc: initialDesc })
+      setLast(code, 1)
+    }
   }
 }
 function setBuilderDesc(code:string, desc:string){
@@ -598,26 +668,44 @@ function setBuilderDesc(code:string, desc:string){
 }
 function onError(err:any){ console.warn(err) }
 function setLast(code:string, qty:number){ last.code = code; last.qty = qty }
-function incLast(){ if(!last.code) return; if(mode.value==='quick'){ changeQty('quick', last.code, +1) } else { changeQty('builder', last.code, +1) } }
-function decLast(){ if(!last.code) return; if(mode.value==='quick'){ changeQty('quick', last.code, -1) } else { changeQty('builder', last.code, -1) } }
-
+function incLast(){
+  if(!last.code) return
+  if(mode.value==='quick'){ changeQty('quick', last.code, +1) } else { changeQty('builder', last.code, +1) }
+}
+function decLast(){
+  if(!last.code) return
+  if(mode.value==='quick'){ changeQty('quick', last.code, -1) } else { changeQty('builder', last.code, -1) }
+}
 function changeQty(which:'quick'|'builder', code:string, delta:number){
   if(which==='quick'){
     const v = Math.max(0, (quickList.get(code)||0) + delta)
-    if(v===0) quickList.delete(code); else quickList.set(code, v)
+    if(v===0) quickList.delete(code)
+    else quickList.set(code, v)
     if(last.code===code) last.qty = v
   } else {
-    const cur = builder.get(code); if(!cur) return
+    const cur = builder.get(code)
+    if(!cur) return
     const v = Math.max(0, cur.qty + delta)
-    if(v===0) builder.delete(code); else builder.set(code, {...cur, qty:v})
+    if(v===0) builder.delete(code)
+    else builder.set(code, {...cur, qty:v})
     if(last.code===code) last.qty = v
   }
 }
-function removeItem(which:'quick'|'builder', code:string){ if(which==='quick') quickList.delete(code); else builder.delete(code) }
-function removeVerify(code:string){ const i = verifyRows.findIndex(r=>r.code===code); if(i>=0) verifyRows.splice(i,1) }
-function clearMode(which:'quick'|'verify'|'builder'){ if(which==='quick') quickList.clear(); if(which==='verify') verifyRows.splice(0); if(which==='builder') builder.clear() }
+function removeItem(which:'quick'|'builder', code:string){
+  if(which==='quick') quickList.delete(code)
+  else builder.delete(code)
+}
+function removeVerify(code:string){
+  const i = verifyRows.findIndex(r=>r.code===code)
+  if(i>=0) verifyRows.splice(i,1)
+}
+function clearMode(which:'quick'|'verify'|'builder'){
+  if(which==='quick') quickList.clear()
+  if(which==='verify') verifyRows.splice(0)
+  if(which==='builder') builder.clear()
+}
 
-/* Exports */
+/* Export helpers */
 function exportQuick(type:'csv'|'xlsx'|'pdf'){
   const rows = [...quickList.entries()].map(([code,qty]) => [code, qty])
   if(type==='csv') exportCSV('quick-list.csv', rows, ['Barcode','QTY'])
@@ -640,8 +728,22 @@ function exportBuilder(type:'csv'|'xlsx'|'pdf'){
 /* Toast + Beep */
 const toast = reactive({ show:false, text:'' })
 let toastTimer: number | undefined
-function showToast(text:string, ms=900){ toast.text=text; toast.show=true; if(toastTimer) clearTimeout(toastTimer as any); toastTimer = setTimeout(()=>{ toast.show=false }, ms) as any }
-function playBeep(){ const Ctx = (window.AudioContext || (window as any).webkitAudioContext) as any; const ctx = new Ctx(); const o = ctx.createOscillator(); const g = ctx.createGain(); o.connect(g); g.connect(ctx.destination); o.frequency.value = 880; g.gain.value = 0.1; o.start(); setTimeout(()=>{ o.stop(); ctx.close() }, 120) }
+function showToast(text:string, ms=900){
+  toast.text = text
+  toast.show = true
+  if(toastTimer) clearTimeout(toastTimer as any)
+  toastTimer = setTimeout(() => { toast.show = false }, ms) as any
+}
+function playBeep(){
+  const Ctx = (window.AudioContext || (window as any).webkitAudioContext) as any
+  const ctx = new Ctx()
+  const o = ctx.createOscillator()
+  const g = ctx.createGain()
+  o.connect(g); g.connect(ctx.destination)
+  o.frequency.value = 880; g.gain.value = 0.1
+  o.start()
+  setTimeout(()=>{ o.stop(); ctx.close() }, 120)
+}
 </script>
 
 <style scoped>
@@ -651,11 +753,11 @@ function playBeep(){ const Ctx = (window.AudioContext || (window as any).webkitA
   --fg: #e8e8e8;
   --edge: rgba(255,255,255,.14);
 
-  /* Header sizing */
+  /* Header */
   --headerH: 71px;
   --logoH: 36px;
 
-  /* Table width hints */
+  /* column widths */
   --qtyCol: 260px;
   --statusCol: 96px;
   --delCol: 56px;
@@ -671,14 +773,37 @@ function playBeep(){ const Ctx = (window.AudioContext || (window as any).webkitA
 }
 
 /* Header */
-.header{ height: var(--headerH); display:flex; align-items:center; border-bottom:1px solid var(--edge); }
-.header-content{ position:relative; display:flex; align-items:center; justify-content:space-between; width:100%; }
+.header{
+  height: var(--headerH);
+  display:flex;
+  align-items:center;
+  border-bottom: 1px solid var(--edge);
+}
+.header-content{
+  position:relative;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  width:100%;
+}
 .logo{ display:flex; align-items:center; gap:.5rem; }
-.logo-icon{ height: var(--logoH); max-height: calc(var(--headerH) - 24px); object-fit: contain; }
-.logo-center{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
-.logo-text{ height: calc(var(--logoH) * 1.3); max-height: calc(var(--headerH) - 20px); object-fit: contain; }
+.logo-icon{
+  height: var(--logoH);
+  max-height: calc(var(--headerH) - 24px);
+  object-fit: contain;
+}
+.logo-center{
+  position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  pointer-events:none;
+}
+.logo-text{
+  height: calc(var(--logoH) * 1.3);
+  max-height: calc(var(--headerH) - 20px);
+  object-fit: contain;
+}
 
-/* Camera surface */
+/* Camera */
 .video{ position: relative; }
 :deep(canvas){ position:absolute; inset:0; z-index:3; }
 :deep(video){ position:relative; z-index:1; }
@@ -718,15 +843,6 @@ td.qty-cell{ padding-right:6px; }
 .qty-pack{ display:flex; justify-content:flex-end; align-items:center; gap:10px; }
 .qty-wrap{ display:inline-flex; align-items:center; gap:6px; }
 .qty-num{ min-width:26px; text-align:center; }
-
-/* ORDER BUILDER two-row layout */
-.builder-table .desc-row td{ padding-top:4px; }
-.desc-input.wide{
-  width:100%;
-  font-size:.95rem;
-  padding:8px 10px;
-  border-radius:10px;
-}
 
 /* Toast */
 .toast{
