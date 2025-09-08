@@ -143,7 +143,7 @@
         </div>
       </div>
 
-      <!-- ORDER BUILDER (editable description under barcode, default "unknown") -->
+      <!-- ORDER BUILDER (editable description under barcode; auto-filled from catalog or "Unknown") -->
       <div v-if="mode==='builder'">
         <table class="table">
           <colgroup>
@@ -156,11 +156,10 @@
               <td class="barcode-col">
                 <div class="barcode-text" style="font-weight:700">{{ row.code }}</div>
                 <input
-                  class="input input-compact ellipsis"
+                  class="input input-compact desc-input"
                   :value="row.desc"
                   @input="setBuilderDesc(row.code, ($event.target as HTMLInputElement).value)"
-                  placeholder="unknown"
-                  style="width:100%; margin-top:2px"
+                  placeholder="Unknown"
                 />
               </td>
               <td class="qty-cell">
@@ -313,12 +312,7 @@ const torchOn = ref(false)
 const cameraConstraints = computed<MediaTrackConstraints>(
   () => selectedDeviceId.value ? { deviceId: selectedDeviceId.value } : { facingMode: 'environment' }
 )
-async function requestPermission(){
-  try{
-    const s = await navigator.mediaDevices.getUserMedia({ video: true })
-    s.getTracks().forEach(t=>t.stop())
-  }catch{}
-}
+async function requestPermission(){ try{ const s = await navigator.mediaDevices.getUserMedia({ video: true }); s.getTracks().forEach(t=>t.stop()) }catch{} }
 async function onCameraReady(){
   try{
     const list = await navigator.mediaDevices.enumerateDevices()
@@ -330,25 +324,13 @@ async function onCameraReady(){
     const track = (vid?.srcObject as MediaStream | undefined)?.getVideoTracks?.()[0] || null
     videoTrack.value = track || null
     torchSupported.value = !!(track && typeof track.getCapabilities === 'function' && (track.getCapabilities as any)().torch !== undefined)
-  }catch{
-    torchSupported.value = false
-  }
+  }catch{ torchSupported.value = false }
 }
-function onDeviceChange(){
-  if(scanning.value){
-    scanning.value=false
-    setTimeout(()=>{
-      scanning.value=true
-      torchOn.value=false
-    }, 0)
-  }
-}
+function onDeviceChange(){ if(scanning.value){ scanning.value=false; setTimeout(()=>{ scanning.value=true; torchOn.value=false }, 0) } }
 function toggleCamera(){
   if(scanning.value){
     scanning.value=false
-    if(videoTrack.value){
-      try{ (videoTrack.value as any).applyConstraints?.({ advanced:[{ torch:false }] }) }catch{}
-    }
+    if(videoTrack.value){ try{ (videoTrack.value as any).applyConstraints?.({ advanced:[{ torch:false }] }) }catch{} }
     torchOn.value=false
     clearPreview()
   }else{
@@ -358,20 +340,13 @@ function toggleCamera(){
 async function toggleTorch(){
   if(!videoTrack.value) return
   const want = !torchOn.value
-  try{
-    await (videoTrack.value as any).applyConstraints?.({ advanced:[{ torch: want }] })
-    torchOn.value = want
-  }catch{
-    torchOn.value = false
-  }
+  try{ await (videoTrack.value as any).applyConstraints?.({ advanced:[{ torch: want }] }); torchOn.value = want }catch{ torchOn.value = false }
 }
 
 /* Setup */
 const formatList: Format[] = [...ALL_FORMATS]
 const enabled = reactive<Record<Format, boolean>>(JSON.parse(localStorage.getItem(LS.enabled)||'{}') || {})
-formatList.forEach(f => {
-  if (enabled[f] === undefined) enabled[f] = (f==='qr_code' || f==='code_128' || f==='ean_13' || f==='upc_a')
-})
+formatList.forEach(f => { if (enabled[f] === undefined) enabled[f] = (f==='qr_code' || f==='code_128' || f==='ean_13' || f==='upc_a') })
 watch(enabled, () => localStorage.setItem(LS.enabled, JSON.stringify(enabled)), { deep:true })
 
 const trims = reactive<TrimRules>(Object.assign({}, DEFAULT_TRIMS, JSON.parse(localStorage.getItem(LS.trims)||'{}')))
@@ -390,22 +365,11 @@ const activeFormats = computed(() => {
 })
 const linearOn = computed(() => LINEAR_GROUP.every(f => enabled[f]))
 const matrixOn = computed(() => MATRIX_GROUP.every(f => enabled[f]))
-function toggleLinear(e: Event){
-  const on = (e.target as HTMLInputElement).checked
-  LINEAR_GROUP.forEach(f => { enabled[f] = on })
-}
-function toggleMatrix(e: Event){
-  const on = (e.target as HTMLInputElement).checked
-  MATRIX_GROUP.forEach(f => { enabled[f] = on })
-}
+function toggleLinear(e: Event){ const on = (e.target as HTMLInputElement).checked; LINEAR_GROUP.forEach(f => { enabled[f] = on }) }
+function toggleMatrix(e: Event){ const on = (e.target as HTMLInputElement).checked; MATRIX_GROUP.forEach(f => { enabled[f] = on }) }
 function enableAll(){ formatList.forEach(f => { enabled[f] = true }) }
 function disableAll(){ formatList.forEach(f => { enabled[f] = false }) }
-function clearAllTrims(){
-  for (const f of formatList){
-    trims[f].prefix = 0
-    trims[f].suffix = 0
-  }
-}
+function clearAllTrims(){ for (const f of formatList){ trims[f].prefix = 0; trims[f].suffix = 0 } }
 
 /* Catalog */
 const catalog = reactive(new Map<string,string>())
@@ -413,8 +377,7 @@ const rawRows = ref<Record<string, unknown>[]>([])
 const columns = ref<string[]>([])
 const barcodeCol = ref<string>(localStorage.getItem(LS.barcodeCol) || '')
 const descCol = ref<string>(localStorage.getItem(LS.descCol) || '')
-const search = ref('')
-const searchBarcode = ref('')
+const search = ref(''); const searchBarcode = ref('')
 const importStats = reactive({ total:0, inserted:0, blank:0, duplicates:0 })
 
 watch(barcodeCol, v => localStorage.setItem(LS.barcodeCol, v))
@@ -437,34 +400,27 @@ function guessCols(headers:string[]){
 }
 function rebuildCatalogFromSelections(){
   catalog.clear()
-  importStats.total = rawRows.value.length
-  importStats.inserted = 0
-  importStats.blank = 0
-  importStats.duplicates = 0
-
+  importStats.total = rawRows.value.length; importStats.inserted = 0; importStats.blank = 0; importStats.duplicates = 0
   const seen = new Set<string>()
   for (const r of rawRows.value){
     const code = String((r as any)[barcodeCol.value] ?? '').trim()
     if(!code){ importStats.blank++; continue }
     const desc = descCol.value ? String((r as any)[descCol.value] ?? '').trim() : ''
-    if(seen.has(code)){ importStats.duplicates++ } else { seen.add(code) }
+    if(seen.has(code)) importStats.duplicates++; else seen.add(code)
     catalog.set(code, desc)
   }
   importStats.inserted = catalog.size
+  syncBuilderDescriptionsFromCatalog() // ← autofill Builder rows still Unknown/empty
 }
 watch([barcodeCol, descCol], rebuildCatalogFromSelections)
 
 async function onFile(e:Event){
-  const file = (e.target as HTMLInputElement).files?.[0]
-  if(!file) return
+  const file = (e.target as HTMLInputElement).files?.[0]; if(!file) return
   const ext = file.name.split('.').pop()?.toLowerCase()
   let rows: Record<string, unknown>[] = []
   if(ext === 'csv'){
     rows = await new Promise<Record<string, unknown>[]>((res, rej)=>{
-      Papa.parse<Record<string, unknown>>(file, {
-        header:true, skipEmptyLines:'greedy', dynamicTyping:false,
-        complete: r => res(r.data as Record<string, unknown>[]), error: rej
-      })
+      Papa.parse<Record<string, unknown>>(file, { header:true, skipEmptyLines:'greedy', dynamicTyping:false, complete: r => res(r.data as any[]), error: rej })
     })
   } else {
     const data = await file.arrayBuffer()
@@ -486,8 +442,7 @@ const filteredCatalog = computed(() => {
     if (qCode){
       if (code.includes(qCode)) out.push({ barcode: code, description: desc })
     } else if (qAny){
-      if (code.toLowerCase().includes(qAny) || (desc||'').toLowerCase().includes(qAny))
-        out.push({ barcode: code, description: desc })
+      if (code.toLowerCase().includes(qAny) || (desc||'').toLowerCase().includes(qAny)) out.push({ barcode: code, description: desc })
     } else {
       out.push({ barcode: code, description: desc })
     }
@@ -495,13 +450,8 @@ const filteredCatalog = computed(() => {
   return out
 })
 function clearCatalog(){
-  rawRows.value = []
-  catalog.clear()
-  columns.value = []
-  barcodeCol.value = ''
-  descCol.value = ''
-  search.value = ''
-  searchBarcode.value = ''
+  rawRows.value = []; catalog.clear(); columns.value = []
+  barcodeCol.value=''; descCol.value=''; search.value=''; searchBarcode.value=''
   importStats.total = importStats.inserted = importStats.blank = importStats.duplicates = 0
   localStorage.removeItem(LS.catalog)
 }
@@ -521,9 +471,21 @@ onMounted(() => {
   try{ const V = JSON.parse(localStorage.getItem(LS.verify)||'[]') as {code:string,ok:boolean}[]; verifyRows.splice(0, verifyRows.length, ...(V||[])) }catch{}
   try{ const B = JSON.parse(localStorage.getItem(LS.builder)||'[]') as [string,{qty:number,desc?:string}][]; for(const [c,v] of B) builder.set(c,v) }catch{}
   try{ const C = JSON.parse(localStorage.getItem(LS.catalog)||'[]') as [string,string][]; catalog.clear(); for(const [c,d] of C) catalog.set(c,d) }catch{}
+  syncBuilderDescriptionsFromCatalog() // ← fill any Unknowns on load
   startGuard()
 })
 onBeforeUnmount(stopGuard)
+
+/* Helper: fill builder desc from Catalog when missing/Unknown */
+function syncBuilderDescriptionsFromCatalog(){
+  for (const [code, item] of builder.entries()){
+    const isUnknown = !item.desc || /^unknown$/i.test(item.desc.trim())
+    if (isUnknown){
+      const found = catalog.get(code)
+      if (found && found.trim() !== '') builder.set(code, { ...item, desc: found })
+    }
+  }
+}
 
 /* Live preview + guard */
 type Detected = { boundingBox?: {x:number;y:number;width:number;height:number}; rawValue?: string; format?: string }
@@ -535,10 +497,7 @@ let guardId: number | undefined
 function startGuard(){
   stopGuard()
   guardId = window.setInterval(() => {
-    if(!scanning.value) {
-      clearPreview()
-      return
-    }
+    if(!scanning.value) { clearPreview(); return }
     const now = performance.now()
     if ((now - lastTrackAt) > 600 || (now - lastCodeAt) > 350) clearPreview()
   }, 150)
@@ -624,7 +583,7 @@ const builderRows = computed(() =>
   [...builder.entries()].map(([code, v]) => ({
     code,
     qty: v.qty,
-    desc: (v.desc && v.desc.trim() !== '') ? v.desc : 'unknown'
+    desc: (v.desc && v.desc.trim() !== '') ? v.desc : 'Unknown'
   }))
 )
 const last = reactive<{code:string|null, qty:number}>({ code:null, qty:0 })
@@ -643,20 +602,22 @@ function commitCode(code:string){
   } else if(mode.value==='verify'){
     const ok = catalog.has(code)
     const i = verifyRows.findIndex(r => r.code === code)
-    if (i >= 0) {
-      verifyRows[i] = { code, ok }
-    } else {
-      verifyRows.push({ code, ok })
-    }
+    if (i >= 0) verifyRows[i] = { code, ok }
+    else verifyRows.push({ code, ok })
     setLast(code, 1)
   } else {
     const ex = builder.get(code)
     if (ex){
       ex.qty += 1
+      // keep existing desc edit if present
+      if(!ex.desc || /^unknown$/i.test(ex.desc.trim())){
+        const found = catalog.get(code)
+        if(found && found.trim() !== '') ex.desc = found
+      }
       builder.set(code, ex)
       setLast(code, ex.qty)
     } else {
-      const initialDesc = catalog.get(code) || 'unknown'  // ← default
+      const initialDesc = catalog.get(code) || 'Unknown'
       builder.set(code, { qty: 1, desc: initialDesc })
       setLast(code, 1)
     }
@@ -668,42 +629,23 @@ function setBuilderDesc(code:string, desc:string){
 }
 function onError(err:any){ console.warn(err) }
 function setLast(code:string, qty:number){ last.code = code; last.qty = qty }
-function incLast(){
-  if(!last.code) return
-  if(mode.value==='quick'){ changeQty('quick', last.code, +1) } else { changeQty('builder', last.code, +1) }
-}
-function decLast(){
-  if(!last.code) return
-  if(mode.value==='quick'){ changeQty('quick', last.code, -1) } else { changeQty('builder', last.code, -1) }
-}
+function incLast(){ if(!last.code) return; if(mode.value==='quick'){ changeQty('quick', last.code, +1) } else { changeQty('builder', last.code, +1) } }
+function decLast(){ if(!last.code) return; if(mode.value==='quick'){ changeQty('quick', last.code, -1) } else { changeQty('builder', last.code, -1) } }
 function changeQty(which:'quick'|'builder', code:string, delta:number){
   if(which==='quick'){
     const v = Math.max(0, (quickList.get(code)||0) + delta)
-    if(v===0) quickList.delete(code)
-    else quickList.set(code, v)
+    if(v===0) quickList.delete(code); else quickList.set(code, v)
     if(last.code===code) last.qty = v
   } else {
-    const cur = builder.get(code)
-    if(!cur) return
+    const cur = builder.get(code); if(!cur) return
     const v = Math.max(0, cur.qty + delta)
-    if(v===0) builder.delete(code)
-    else builder.set(code, {...cur, qty:v})
+    if(v===0) builder.delete(code); else builder.set(code, {...cur, qty:v})
     if(last.code===code) last.qty = v
   }
 }
-function removeItem(which:'quick'|'builder', code:string){
-  if(which==='quick') quickList.delete(code)
-  else builder.delete(code)
-}
-function removeVerify(code:string){
-  const i = verifyRows.findIndex(r=>r.code===code)
-  if(i>=0) verifyRows.splice(i,1)
-}
-function clearMode(which:'quick'|'verify'|'builder'){
-  if(which==='quick') quickList.clear()
-  if(which==='verify') verifyRows.splice(0)
-  if(which==='builder') builder.clear()
-}
+function removeItem(which:'quick'|'builder', code:string){ if(which==='quick') quickList.delete(code); else builder.delete(code) }
+function removeVerify(code:string){ const i = verifyRows.findIndex(r=>r.code===code); if(i>=0) verifyRows.splice(i,1) }
+function clearMode(which:'quick'|'verify'|'builder'){ if(which==='quick') quickList.clear(); if(which==='verify') verifyRows.splice(0); if(which==='builder') builder.clear() }
 
 /* Export helpers */
 function exportQuick(type:'csv'|'xlsx'|'pdf'){
@@ -728,22 +670,8 @@ function exportBuilder(type:'csv'|'xlsx'|'pdf'){
 /* Toast + Beep */
 const toast = reactive({ show:false, text:'' })
 let toastTimer: number | undefined
-function showToast(text:string, ms=900){
-  toast.text = text
-  toast.show = true
-  if(toastTimer) clearTimeout(toastTimer as any)
-  toastTimer = setTimeout(() => { toast.show = false }, ms) as any
-}
-function playBeep(){
-  const Ctx = (window.AudioContext || (window as any).webkitAudioContext) as any
-  const ctx = new Ctx()
-  const o = ctx.createOscillator()
-  const g = ctx.createGain()
-  o.connect(g); g.connect(ctx.destination)
-  o.frequency.value = 880; g.gain.value = 0.1
-  o.start()
-  setTimeout(()=>{ o.stop(); ctx.close() }, 120)
-}
+function showToast(text:string, ms=900){ toast.text=text; toast.show=true; if(toastTimer) clearTimeout(toastTimer as any); toastTimer = setTimeout(()=>{ toast.show=false }, ms) as any }
+function playBeep(){ const Ctx = (window.AudioContext || (window as any).webkitAudioContext) as any; const ctx = new Ctx(); const o = ctx.createOscillator(); const g = ctx.createGain(); o.connect(g); g.connect(ctx.destination); o.frequency.value = 880; g.gain.value = 0.1; o.start(); setTimeout(()=>{ o.stop(); ctx.close() }, 120) }
 </script>
 
 <style scoped>
@@ -753,55 +681,23 @@ function playBeep(){
   --fg: #e8e8e8;
   --edge: rgba(255,255,255,.14);
 
-  /* Header */
   --headerH: 71px;
   --logoH: 36px;
 
-  /* column widths */
   --qtyCol: 260px;
   --statusCol: 96px;
   --delCol: 56px;
 }
-.light{
-  --overlayBg: rgba(255,255,255,.8);
-  --overlayFg: #000;
-  --fg: #111;
-  --edge: rgba(0,0,0,.14);
-}
-@media (max-width:420px){
-  :root{ --qtyCol: 220px; --statusCol: 84px; }
-}
+.light{ --overlayBg: rgba(255,255,255,.8); --overlayFg: #000; --fg: #111; --edge: rgba(0,0,0,.14); }
+@media (max-width:420px){ :root{ --qtyCol: 220px; --statusCol: 84px; } }
 
 /* Header */
-.header{
-  height: var(--headerH);
-  display:flex;
-  align-items:center;
-  border-bottom: 1px solid var(--edge);
-}
-.header-content{
-  position:relative;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  width:100%;
-}
+.header{ height: var(--headerH); display:flex; align-items:center; border-bottom: 1px solid var(--edge); }
+.header-content{ position:relative; display:flex; align-items:center; justify-content:space-between; width:100%; }
 .logo{ display:flex; align-items:center; gap:.5rem; }
-.logo-icon{
-  height: var(--logoH);
-  max-height: calc(var(--headerH) - 24px);
-  object-fit: contain;
-}
-.logo-center{
-  position:absolute; inset:0;
-  display:flex; align-items:center; justify-content:center;
-  pointer-events:none;
-}
-.logo-text{
-  height: calc(var(--logoH) * 1.3);
-  max-height: calc(var(--headerH) - 20px);
-  object-fit: contain;
-}
+.logo-icon{ height: var(--logoH); max-height: calc(var(--headerH) - 24px); object-fit: contain; }
+.logo-center{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+.logo-text{ height: calc(var(--logoH) * 1.3); max-height: calc(var(--headerH) - 20px); object-fit: contain; }
 
 /* Camera */
 .video{ position: relative; }
@@ -826,6 +722,13 @@ function playBeep(){
   overflow:hidden;
   text-overflow:ellipsis;
   font-variant-numeric: tabular-nums;
+}
+.desc-input{
+  width:100%;
+  margin-top:2px;
+  font-size:.95rem;
+  padding:8px 10px;
+  border-radius:10px;
 }
 .ellipsis{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
