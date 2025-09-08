@@ -5,11 +5,11 @@
     <div class="header">
       <div class="header-content">
         <div class="logo">
-          <img v-if="isDark" class="logo-icon" src="/favicon_1024_dark.png" alt="icon" />
+          <img v-if="isDark" class="logo-icon" src="/favicon_1024_light.png" alt="icon" />
           <img v-else class="logo-icon" src="/favicon_1024_light.png" alt="icon" />
         </div>
         <div class="logo-center">
-          <img class="logo-text" :src="isDark ? '/text_1024_dark.png' : '/text_1024_light.png'" alt="ScanSnap" />
+          <img class="logo-text" :src="isDark ? '/text_1024_light.png' : '/text_1024_dark.png'" alt="ScanSnap" />
         </div>
         <button class="theme-toggle" @click="toggleTheme">{{ isDark ? 'Light' : 'Dark' }}</button>
       </div>
