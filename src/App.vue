@@ -80,10 +80,7 @@
       <!-- QUICK LIST -->
       <div v-if="mode==='quick'">
         <table class="table">
-          <colgroup>
-            <col class="col-barcode" />
-            <col class="col-qty" />
-          </colgroup>
+          <colgroup><col class="col-barcode" /><col class="col-qty" /></colgroup>
           <thead><tr><th>Barcode</th><th class="right">QTY</th></tr></thead>
           <tbody>
             <tr v-for="([code, qty]) in quickEntries" :key="code">
@@ -117,11 +114,7 @@
         </div>
 
         <table class="table">
-          <colgroup>
-            <col class="col-barcode" />
-            <col class="col-status" />
-            <col class="col-del" />
-          </colgroup>
+          <colgroup><col class="col-barcode" /><col class="col-status" /><col class="col-del" /></colgroup>
           <thead><tr><th>Barcode</th><th class="center">Status</th><th></th></tr></thead>
           <tbody>
             <tr v-for="r in verifyRows" :key="r.code">
@@ -143,20 +136,17 @@
         </div>
       </div>
 
-      <!-- ORDER BUILDER (editable description under barcode; auto-filled from catalog or "Unknown") -->
+      <!-- ORDER BUILDER (editable description under barcode) -->
       <div v-if="mode==='builder'">
         <table class="table">
-          <colgroup>
-            <col class="col-barcode" />
-            <col class="col-qty" />
-          </colgroup>
+          <colgroup><col class="col-barcode" /><col class="col-qty" /></colgroup>
           <thead><tr><th>Barcode / Description</th><th class="right">QTY</th></tr></thead>
           <tbody>
             <tr v-for="row in builderRows" :key="row.code">
               <td class="barcode-col">
                 <div class="barcode-text" style="font-weight:700">{{ row.code }}</div>
                 <input
-                  class="input input-compact desc-input"
+                  class="input desc-input"
                   :value="row.desc"
                   @input="setBuilderDesc(row.code, ($event.target as HTMLInputElement).value)"
                   placeholder="Unknown"
@@ -286,10 +276,7 @@ const LS = {
 
 /* Theme */
 const isDark = ref(!(localStorage.getItem(LS.theme) === 'light'))
-watch(isDark, v => {
-  document.documentElement.classList.toggle('light', !v)
-  localStorage.setItem(LS.theme, v ? 'dark' : 'light')
-})
+watch(isDark, v => { document.documentElement.classList.toggle('light', !v); localStorage.setItem(LS.theme, v?'dark':'light') })
 document.documentElement.classList.toggle('light', !isDark.value)
 function toggleTheme(){ isDark.value = !isDark.value }
 
@@ -309,8 +296,8 @@ const videoTrack = ref<MediaStreamTrack | null>(null)
 const torchSupported = ref(false)
 const torchOn = ref(false)
 
-const cameraConstraints = computed<MediaTrackConstraints>(
-  () => selectedDeviceId.value ? { deviceId: selectedDeviceId.value } : { facingMode: 'environment' }
+const cameraConstraints = computed<MediaTrackConstraints>(() =>
+  selectedDeviceId.value ? { deviceId: selectedDeviceId.value } : { facingMode: 'environment' }
 )
 async function requestPermission(){ try{ const s = await navigator.mediaDevices.getUserMedia({ video: true }); s.getTracks().forEach(t=>t.stop()) }catch{} }
 async function onCameraReady(){
@@ -326,7 +313,7 @@ async function onCameraReady(){
     torchSupported.value = !!(track && typeof track.getCapabilities === 'function' && (track.getCapabilities as any)().torch !== undefined)
   }catch{ torchSupported.value = false }
 }
-function onDeviceChange(){ if(scanning.value){ scanning.value=false; setTimeout(()=>{ scanning.value=true; torchOn.value=false }, 0) } }
+function onDeviceChange(){ if(scanning.value){ scanning.value=false; setTimeout(()=>{ scanning.value=true; torchOn.value=false },0) } }
 function toggleCamera(){
   if(scanning.value){
     scanning.value=false
@@ -343,7 +330,7 @@ async function toggleTorch(){
   try{ await (videoTrack.value as any).applyConstraints?.({ advanced:[{ torch: want }] }); torchOn.value = want }catch{ torchOn.value = false }
 }
 
-/* Setup */
+/* Setup: formats, trims, checks */
 const formatList: Format[] = [...ALL_FORMATS]
 const enabled = reactive<Record<Format, boolean>>(JSON.parse(localStorage.getItem(LS.enabled)||'{}') || {})
 formatList.forEach(f => { if (enabled[f] === undefined) enabled[f] = (f==='qr_code' || f==='code_128' || f==='ean_13' || f==='upc_a') })
@@ -359,10 +346,13 @@ watch(stripCD, v => localStorage.setItem(LS.stripCD, v?'1':'0'))
 watch(validateCD, v => localStorage.setItem(LS.validateCD, v?'1':'0'))
 watch(beep, v => localStorage.setItem(LS.beep, v?'1':'0'))
 
+/* Active formats for the camera */
 const activeFormats = computed(() => {
   const list = formatList.filter(f => enabled[f])
   return list.length ? list : ['qr_code']
 })
+
+/* Group toggles */
 const linearOn = computed(() => LINEAR_GROUP.every(f => enabled[f]))
 const matrixOn = computed(() => MATRIX_GROUP.every(f => enabled[f]))
 function toggleLinear(e: Event){ const on = (e.target as HTMLInputElement).checked; LINEAR_GROUP.forEach(f => { enabled[f] = on }) }
@@ -371,7 +361,7 @@ function enableAll(){ formatList.forEach(f => { enabled[f] = true }) }
 function disableAll(){ formatList.forEach(f => { enabled[f] = false }) }
 function clearAllTrims(){ for (const f of formatList){ trims[f].prefix = 0; trims[f].suffix = 0 } }
 
-/* Catalog */
+/* Catalog data */
 const catalog = reactive(new Map<string,string>())
 const rawRows = ref<Record<string, unknown>[]>([])
 const columns = ref<string[]>([])
@@ -410,7 +400,7 @@ function rebuildCatalogFromSelections(){
     catalog.set(code, desc)
   }
   importStats.inserted = catalog.size
-  syncBuilderDescriptionsFromCatalog() // ← autofill Builder rows still Unknown/empty
+  syncBuilderDescriptionsFromCatalog() // keep user's edits; only fill empty/Unknown
 }
 watch([barcodeCol, descCol], rebuildCatalogFromSelections)
 
@@ -471,12 +461,12 @@ onMounted(() => {
   try{ const V = JSON.parse(localStorage.getItem(LS.verify)||'[]') as {code:string,ok:boolean}[]; verifyRows.splice(0, verifyRows.length, ...(V||[])) }catch{}
   try{ const B = JSON.parse(localStorage.getItem(LS.builder)||'[]') as [string,{qty:number,desc?:string}][]; for(const [c,v] of B) builder.set(c,v) }catch{}
   try{ const C = JSON.parse(localStorage.getItem(LS.catalog)||'[]') as [string,string][]; catalog.clear(); for(const [c,d] of C) catalog.set(c,d) }catch{}
-  syncBuilderDescriptionsFromCatalog() // ← fill any Unknowns on load
+  syncBuilderDescriptionsFromCatalog()
   startGuard()
 })
 onBeforeUnmount(stopGuard)
 
-/* Helper: fill builder desc from Catalog when missing/Unknown */
+/* Fill Builder desc from Catalog only when missing/Unknown */
 function syncBuilderDescriptionsFromCatalog(){
   for (const [code, item] of builder.entries()){
     const isUnknown = !item.desc || /^unknown$/i.test(item.desc.trim())
@@ -497,7 +487,7 @@ let guardId: number | undefined
 function startGuard(){
   stopGuard()
   guardId = window.setInterval(() => {
-    if(!scanning.value) { clearPreview(); return }
+    if(!scanning.value){ clearPreview(); return }
     const now = performance.now()
     if ((now - lastTrackAt) > 600 || (now - lastCodeAt) > 350) clearPreview()
   }, 150)
@@ -583,7 +573,7 @@ const builderRows = computed(() =>
   [...builder.entries()].map(([code, v]) => ({
     code,
     qty: v.qty,
-    desc: (v.desc && v.desc.trim() !== '') ? v.desc : 'Unknown'
+    desc: (v.desc && v.desc.trim() !== '') ? v.desc : (catalog.get(code) || 'Unknown')
   }))
 )
 const last = reactive<{code:string|null, qty:number}>({ code:null, qty:0 })
@@ -602,17 +592,16 @@ function commitCode(code:string){
   } else if(mode.value==='verify'){
     const ok = catalog.has(code)
     const i = verifyRows.findIndex(r => r.code === code)
-    if (i >= 0) verifyRows[i] = { code, ok }
-    else verifyRows.push({ code, ok })
+    if (i >= 0) { verifyRows[i] = { code, ok } } else { verifyRows.push({ code, ok }) }
     setLast(code, 1)
   } else {
     const ex = builder.get(code)
     if (ex){
       ex.qty += 1
-      // keep existing desc edit if present
       if(!ex.desc || /^unknown$/i.test(ex.desc.trim())){
         const found = catalog.get(code)
         if(found && found.trim() !== '') ex.desc = found
+        else ex.desc = 'Unknown'
       }
       builder.set(code, ex)
       setLast(code, ex.qty)
@@ -647,7 +636,7 @@ function removeItem(which:'quick'|'builder', code:string){ if(which==='quick') q
 function removeVerify(code:string){ const i = verifyRows.findIndex(r=>r.code===code); if(i>=0) verifyRows.splice(i,1) }
 function clearMode(which:'quick'|'verify'|'builder'){ if(which==='quick') quickList.clear(); if(which==='verify') verifyRows.splice(0); if(which==='builder') builder.clear() }
 
-/* Export helpers */
+/* Exports */
 function exportQuick(type:'csv'|'xlsx'|'pdf'){
   const rows = [...quickList.entries()].map(([code,qty]) => [code, qty])
   if(type==='csv') exportCSV('quick-list.csv', rows, ['Barcode','QTY'])
@@ -725,7 +714,7 @@ function playBeep(){ const Ctx = (window.AudioContext || (window as any).webkitA
 }
 .desc-input{
   width:100%;
-  margin-top:2px;
+  margin-top:4px;
   font-size:.95rem;
   padding:8px 10px;
   border-radius:10px;
