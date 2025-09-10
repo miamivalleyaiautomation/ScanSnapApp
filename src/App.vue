@@ -668,7 +668,7 @@ function playBeep(){ const Ctx = (window.AudioContext || (window as any).webkitA
   --logoH: 36px;
 
   /* Table width hints */
-  --qtyCol: 260px;
+  --qtyCol: 175px;
   --statusCol: 96px;
   --delCol: 56px;
 }
