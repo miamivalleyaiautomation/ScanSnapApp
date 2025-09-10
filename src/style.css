@@ -142,7 +142,7 @@ body{
 
   /* columns (unchanged) */
   --qtyCol: 260px;
-  --statusCol: 96px;
+  --statusCol: 62px;
   --delCol: 56px;
 }
 .light{
