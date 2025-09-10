@@ -141,7 +141,7 @@ body{
   --logoH: clamp(32px, 7.5vw, 48px); /* icon height; scales by screen; adjust as you like */
 
   /* columns (unchanged) */
-  --qtyCol: 260px;
+  --qtyCol: 175px;
   --statusCol: 62px;
   --delCol: 56px;
 }
