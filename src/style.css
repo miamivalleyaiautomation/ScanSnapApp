@@ -137,7 +137,7 @@ body{
   --edge: rgba(255,255,255,.14);
 
   /* Header (+50px). Logo height is responsive and the text is 30% larger */
-  --headerH: 96px;
+  --headerH: 62px;
   --logoH: clamp(32px, 7.5vw, 48px); /* icon height; scales by screen; adjust as you like */
 
   /* columns (unchanged) */
