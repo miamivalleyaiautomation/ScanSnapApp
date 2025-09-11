@@ -138,7 +138,7 @@
 
       <!-- ORDER BUILDER (editable description under barcode) -->
       <div v-if="mode==='builder'">
-        <table class="table">
+        <table class="table table-builder">
           <colgroup><col class="col-barcode" /><col class="col-qty" /></colgroup>
           <thead><tr><th>Barcode / Description</th><th class="right">QTY</th></tr></thead>
           <tbody>
