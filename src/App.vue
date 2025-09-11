@@ -149,6 +149,8 @@
                   class="input desc-input"
                   :value="row.desc"
                   @input="setBuilderDesc(row.code, ($event.target as HTMLInputElement).value)"
+                  @focus="editingCode = row.code"
+                  @blur="onDescBlur(row.code, ($event.target as HTMLInputElement).value)"
                   placeholder="Unknown"
                 />
               </td>
@@ -569,13 +571,19 @@ function paintTrack(codes: Detected[], ctx: CanvasRenderingContext2D) {
 /* Commit + exports + controls */
 const knownCount = computed(() => verifyRows.filter(r=>r.ok).length)
 const unknownCount = computed(() => verifyRows.filter(r=>!r.ok).length)
+
+// Track which row is actively being edited to suppress fallback while typing
+const editingCode = ref<string | null>(null)
+
+// Show exact stored text while editing; otherwise show stored or catalog suggestion.
 const builderRows = computed(() =>
-  [...builder.entries()].map(([code, v]) => ({
-    code,
-    qty: v.qty,
-    desc: (v.desc && v.desc.trim() !== '') ? v.desc : (catalog.get(code) || 'Unknown')
-  }))
+  [...builder.entries()].map(([code, v]) => {
+    const stored = (v.desc && !/^unknown$/i.test(v.desc.trim())) ? v.desc : ''
+    const show = (editingCode.value === code) ? stored : (stored || catalog.get(code) || '')
+    return { code, qty: v.qty, desc: show }
+  })
 )
+
 const last = reactive<{code:string|null, qty:number}>({ code:null, qty:0 })
 
 function tapToAdd(){
@@ -616,6 +624,11 @@ function setBuilderDesc(code:string, desc:string){
   const cur = builder.get(code) || { qty:0, desc:'' }
   builder.set(code, { ...cur, desc })
 }
+function onDescBlur(code: string, val: string) {
+  editingCode.value = null
+  const trimmed = val.trim()
+  if (trimmed === '') setBuilderDesc(code, 'Unknown')
+}
 function onError(err:any){ console.warn(err) }
 function setLast(code:string, qty:number){ last.code = code; last.qty = qty }
 function incLast(){ if(!last.code) return; if(mode.value==='quick'){ changeQty('quick', last.code, +1) } else { changeQty('builder', last.code, +1) } }
@@ -650,7 +663,7 @@ function exportVerify(type:'csv'|'xlsx'|'pdf'){
   if(type==='pdf') exportPDF('catalog-verify.pdf', rows, ['Barcode','Status'])
 }
 function exportBuilder(type:'csv'|'xlsx'|'pdf'){
-  const rows = builderRows.value.map(r => [r.code, r.desc, r.qty])
+  const rows = builderRows.value.map(r => [r.code, (r.desc && r.desc.trim() !== '' ? r.desc : 'Unknown'), r.qty])
   if(type==='csv') exportCSV('order-builder.csv', rows, ['Barcode','Description','QTY'])
   if(type==='xlsx') exportXLSX('order-builder.xlsx', rows, ['Barcode','Description','QTY'])
   if(type==='pdf') exportPDF('order-builder.pdf', rows, ['Barcode','Description','QTY'])
@@ -748,28 +761,27 @@ td.qty-cell{ padding-right:6px; }
   box-shadow:0 4px 12px rgba(0,0,0,.25);
   z-index:5;
 }
-  /* Order Builder: allow wrap + stacked description under barcode */
+
+/* Order Builder: allow wrap + stacked description under barcode */
 .table.table-builder th,
 .table.table-builder td{
-white-space: normal !important;
-overflow: visible !important;
-text-overflow: clip !important;
-vertical-align: top;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  vertical-align: top;
 }
-
 
 .table.table-builder .barcode-text{
-display:block; /* barcode on its own line */
-white-space: normal !important;
-overflow: visible !important;
-text-overflow: clip !important;
-word-break: break-word; /* very long codes */
+  display:block; /* barcode on its own line */
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  word-break: break-word; /* very long codes */
 }
 
-
 .table.table-builder .desc-input{
-display:block; /* force below barcode */
-width:100%;
-margin-top:4px;
+  display:block; /* force below barcode */
+  width:100%;
+  margin-top:4px;
 }
 </style>
