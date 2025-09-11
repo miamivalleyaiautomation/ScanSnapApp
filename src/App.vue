@@ -748,4 +748,28 @@ td.qty-cell{ padding-right:6px; }
   box-shadow:0 4px 12px rgba(0,0,0,.25);
   z-index:5;
 }
+  /* Order Builder: allow wrap + stacked description under barcode */
+.table.table-builder th,
+.table.table-builder td{
+white-space: normal !important;
+overflow: visible !important;
+text-overflow: clip !important;
+vertical-align: top;
+}
+
+
+.table.table-builder .barcode-text{
+display:block; /* barcode on its own line */
+white-space: normal !important;
+overflow: visible !important;
+text-overflow: clip !important;
+word-break: break-word; /* very long codes */
+}
+
+
+.table.table-builder .desc-input{
+display:block; /* force below barcode */
+width:100%;
+margin-top:4px;
+}
 </style>
