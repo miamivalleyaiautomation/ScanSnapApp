@@ -1,8 +1,8 @@
-# /src/utils/exporters.ts
+// FILE: src/utils/exporters.ts
 import * as XLSX from 'xlsx';
-// @ts-ignore
+// @ts-ignore - jspdf ships TS but default import is fine in Vite
 import jsPDF from 'jspdf';
-// @ts-ignore
+// @ts-ignore - plugin augments jsPDF at runtime
 import autoTable from 'jspdf-autotable';
 import type { VerifyRow } from '@/types/catalog';
 
@@ -19,15 +19,17 @@ export function exportCSV(
   const all = headers ? [headers, ...rows] : rows;
   const csvBody = all
     .map(r =>
-      r.map(cell => {
-        const s = String(cell ?? '');
-        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-      }).join(','),
+      r
+        .map(cell => {
+          const s = String(cell ?? '');
+          return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+        })
+        .join(',')
     )
     .join(newline);
 
   const parts: (string | BlobPart)[] = [];
-  if (useBOM) parts.push('\ufeff');
+  if (useBOM) parts.push('\ufeff'); // Why: Excel delimiter/encoding detection
   parts.push(csvBody);
 
   triggerDownload(new Blob(parts, { type: 'text/csv;charset=utf-8;' }), filename);
@@ -40,7 +42,12 @@ export function exportXLSX(filename: string, rows: (string | number)[][], header
   const ws = XLSX.utils.aoa_to_sheet(sheetRows);
   XLSX.utils.book_append_sheet(wb, ws, 'ScanSnap');
   const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-  triggerDownload(new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), filename);
+  triggerDownload(
+    new Blob([wbout], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }),
+    filename
+  );
 }
 
 /** PDF export (generic table with branding) */
@@ -48,7 +55,8 @@ export async function exportPDF(filename: string, rows: (string | number)[][], h
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' } as any);
 
   const pageW = (doc as any).internal.pageSize.getWidth?.() || 210;
-  const marginL = 12, marginR = 12;
+  const marginL = 12,
+    marginR = 12;
   const headerTop = 10;
   const footerY = 287;
   const headerBottomY = 24;
@@ -67,7 +75,7 @@ export async function exportPDF(filename: string, rows: (string | number)[][], h
   const headRow = headers ?? [];
   const bodyRows = rows.map(r => r.map(c => String(c ?? '')));
 
-  ;(autoTable as any)(doc, {
+  (autoTable as any)(doc, {
     head: headRow.length ? [headRow] : undefined,
     body: bodyRows,
     startY: headerBottomY + 4,
@@ -75,6 +83,7 @@ export async function exportPDF(filename: string, rows: (string | number)[][], h
     styles: { fontSize: 9, cellPadding: 2.5, overflow: 'linebreak' },
     headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255] },
     didDrawPage: (data: any) => {
+      // Header images + dividers (Why: brand + readability when printed)
       try {
         doc.addImage(iconImg.dataURL, 'PNG', marginL, headerTop, iconW, iconH);
         const tx = (pageW - textW) / 2;
@@ -88,7 +97,8 @@ export async function exportPDF(filename: string, rows: (string | number)[][], h
       doc.setFontSize(8);
       const ts = formatStamp(new Date());
       doc.text(ts, marginL, footerY);
-      const totalPages = (doc as any).internal.getNumberOfPages?.() || doc.getNumberOfPages?.() || 1;
+      const totalPages =
+        (doc as any).internal.getNumberOfPages?.() || doc.getNumberOfPages?.() || 1;
       const pageNum = data?.pageNumber ?? (doc as any).getCurrentPageInfo?.().pageNumber ?? 1;
       const rightText = `${pageNum}/${totalPages}`;
       const tw = doc.getTextWidth(rightText);
@@ -157,7 +167,9 @@ function scaleWidth(meta: { width: number; height: number }, targetH: number): n
   const ratio = meta.width / meta.height;
   return targetH * ratio;
 }
-function pad(n: number): string { return n < 10 ? `0${n}` : String(n); }
+function pad(n: number): string {
+  return n < 10 ? `0${n}` : String(n);
+}
 function formatStamp(d: Date): string {
   const yyyy = d.getFullYear();
   const mm = pad(d.getMonth() + 1);
