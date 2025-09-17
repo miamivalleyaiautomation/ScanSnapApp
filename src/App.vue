@@ -28,7 +28,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import VerifyTab from '@/components/VerifyTab.vue';
+import VerifyTab from './components/VerifyTab.vue';
 
 const tab = ref<'verify'|'scanner'>('verify');
 const verifyRef = ref<InstanceType<typeof VerifyTab> | null>(null);
