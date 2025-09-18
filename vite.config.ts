@@ -1,11 +1,13 @@
-// FILE: vite.config.ts
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import path from 'node:path'
 
-// Enables .vue SFC compilation
 export default defineConfig({
   plugins: [vue()],
-  server: { host: true },
-  build: { target: 'es2020', sourcemap: false },
-  optimizeDeps: { include: ['vue', 'vue-qrcode-reader'] }
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
+  // no need to externalize local modules; fix imports instead
 })
