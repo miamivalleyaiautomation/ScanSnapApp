@@ -6,8 +6,7 @@ export default defineConfig({
   plugins: [vue()],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
-    },
-  },
-  // no need to externalize local modules; fix imports instead
+      '@': path.resolve(__dirname, './src')
+    }
+  }
 })
