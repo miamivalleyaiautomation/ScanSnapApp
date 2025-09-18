@@ -1,9 +1,7 @@
-<!-- src/views/setup.vue -->
 <template>
   <div class="setup-wrap">
     <h1 class="setup-title">Setup</h1>
 
-    <!-- Manual entry toggle -->
     <section class="setting-row">
       <label class="switch-line">
         <input
@@ -15,8 +13,6 @@
       </label>
       <p class="muted">Disable to hide the manual code input on the scan screen.</p>
     </section>
-
-    <!-- Add your other settings here -->
   </div>
 </template>
 

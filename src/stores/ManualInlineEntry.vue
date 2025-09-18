@@ -1,4 +1,3 @@
-<!-- src/components/ManualInlineEntry.vue -->
 <template>
   <form class="ss-inline" @submit.prevent="submit">
     <label for="manual-inline-code" class="ss-label">Manual entry</label>

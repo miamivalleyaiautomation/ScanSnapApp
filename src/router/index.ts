@@ -1,9 +1,6 @@
-// src/router/index.ts
 import { createRouter, createWebHistory } from 'vue-router'
-
-// Adjust these imports to match your file locations
-import VerifyTab from '@/views/VerifyTab.vue'
-import Setup from '@/views/setup.vue' // <-- you said the file is setup.vue
+import VerifyTab from '@/components/VerifyTab.vue' // path matches the error log
+import Setup from '@/views/setup.vue'
 
 const routes = [
   { path: '/', name: 'verify', component: VerifyTab },
@@ -13,7 +10,7 @@ const routes = [
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes,
-  scrollBehavior() { return { top: 0 } },
+  scrollBehavior: () => ({ top: 0 }),
 })
 
 export default router

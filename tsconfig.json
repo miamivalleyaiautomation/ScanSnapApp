@@ -1,17 +1,20 @@
-// tsconfig.json (merge; keep as valid JSON)
 {
   "compilerOptions": {
-    "baseUrl": ".",
-    "paths": { "@/*": ["src/*"] },
-    "types": ["vite/client"],
+    "target": "ES2020",
+    "useDefineForClassFields": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "target": "ES2020",
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "strict": true,
-    "resolveJsonModule": true,
     "jsx": "preserve",
-    "isolatedModules": true
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    }
   },
-  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.vue"]
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx", "src/**/*.vue"]
 }
