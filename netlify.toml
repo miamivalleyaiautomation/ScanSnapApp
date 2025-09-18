@@ -9,3 +9,4 @@
   for = "/*"
   [headers.values]
     Permissions-Policy = "camera=(self)"
+
