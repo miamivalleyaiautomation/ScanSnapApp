@@ -1,25 +1,20 @@
-<!-- src/views/VerifyTab.vue -->
 <template>
   <div class="verify-wrap">
-    <!-- Header / Controls -->
     <div class="verify-head">
       <button class="tap-to-scan" @click="startCamera">TAP TO SCAN</button>
-      <!-- your other controls remain -->
     </div>
 
-    <!-- Manual entry sits *right under* TAP TO SCAN when enabled -->
+    <!-- Manual entry directly under TAP TO SCAN (toggleable) -->
     <ManualInlineEntry
       v-if="settings.manualEntryEnabled"
       @submit="handleManualInlineSubmit"
     />
 
-    <!-- Camera area -->
     <div class="camera-shell">
       <video ref="videoRef" autoplay playsinline muted class="camera-feed"></video>
       <canvas ref="canvasRef" class="camera-canvas" hidden></canvas>
     </div>
 
-    <!-- Results / table -->
     <div class="results-shell">
       <slot name="results"></slot>
     </div>
@@ -30,13 +25,13 @@
 import { ref, onBeforeUnmount } from 'vue'
 import ManualInlineEntry from '@/components/ManualInlineEntry.vue'
 import { useSettingsStore } from '@/stores/settingsStore'
+
 const settings = useSettingsStore()
 
 const videoRef = ref<HTMLVideoElement | null>(null)
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 let stream: MediaStream | null = null
 
-// Forward manual entries to your existing scan path
 declare const handleDetected:
   | ((rawText: string, opts?: { qty?: number; source?: string }) => void)
   | undefined
@@ -50,9 +45,7 @@ function forwardToScanPath(code: string, source: string) {
   } else if (typeof onCodeDetected === 'function') {
     onCodeDetected(code, { source })
   } else {
-    window.dispatchEvent(
-      new CustomEvent('ss:code-detected', { detail: { code, source } })
-    )
+    window.dispatchEvent(new CustomEvent('ss:code-detected', { detail: { code, source } }))
   }
 }
 
@@ -68,10 +61,9 @@ async function startCamera() {
       audio: false,
     })
     if (videoRef.value) {
-      videoRef.value.srcObject = stream
+      ;(videoRef.value as any).srcObject = stream
       await videoRef.value.play()
     }
-    // your scanner init loop continues as before
   } catch (err) {
     console.error('Camera start failed:', err)
   }
