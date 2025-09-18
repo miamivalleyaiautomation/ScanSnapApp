@@ -1,15 +1,13 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import VerifyTab from '@/components/VerifyTab.vue' // path matches the error log
+import VerifyTab from '@/views/VerifyTab.vue'
 import Setup from '@/views/setup.vue'
-
-const routes = [
-  { path: '/', name: 'verify', component: VerifyTab },
-  { path: '/setup', name: 'setup', component: Setup },
-]
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
-  routes,
+  routes: [
+    { path: '/', name: 'verify', component: VerifyTab },
+    { path: '/setup', name: 'setup', component: Setup },
+  ],
   scrollBehavior: () => ({ top: 0 }),
 })
 
