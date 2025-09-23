@@ -1,29 +1,52 @@
-<!-- src/components/TabNavigation.vue -->
 <template>
   <div class="tabs">
     <button class="tab" :class="{active:modelValue==='scan'}" @click="$emit('update:modelValue', 'scan')">SCAN</button>
-    <button class="tab" :class="{active:modelValue==='catalog'}" @click="$emit('update:modelValue', 'catalog')">CATALOG</button>
+    <button 
+      class="tab" 
+      :class="{active:modelValue==='catalog', disabled:!canUseCatalog}" 
+      @click="handleCatalogClick"
+      :title="!canUseCatalog ? 'Requires Plus subscription' : ''"
+    >
+      CATALOG
+      <span v-if="!canUseCatalog" class="lock-icon">🔒</span>
+    </button>
     <button class="tab" :class="{active:modelValue==='setup'}" @click="$emit('update:modelValue', 'setup')">SETUP</button>
   </div>
 </template>
 
 <script setup lang="ts">
+import authService from '@/services/auth.service'
+
 defineProps<{
   modelValue: 'scan' | 'catalog' | 'setup'
+  canUseCatalog?: boolean
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   'update:modelValue': [value: 'scan' | 'catalog' | 'setup']
 }>()
+
+function handleCatalogClick() {
+  if (!authService.canUseFeature('catalog_import')) {
+    if (confirm('Catalog import requires Plus subscription. Would you like to upgrade?')) {
+      authService.redirectToUpgrade()
+    }
+    return
+  }
+  emit('update:modelValue', 'catalog')
+}
 </script>
 
 <style scoped>
-.tabs{display:flex;gap:10px;margin:10px 0 14px}
-.tab{
-  flex:1 1 0;padding:12px 16px;border-radius:12px;
-  border:1px solid var(--pill-border);
-  background:var(--panel2);cursor:pointer;text-align:center;color:var(--text)
+/* ... existing styles ... */
+
+.tab.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
-.tab.active{outline:2px solid var(--brand);background:transparent}
-:root.light .tab.active{ border-color: var(--brand); }
+
+.lock-icon {
+  margin-left: 4px;
+  font-size: 0.875rem;
+}
 </style>

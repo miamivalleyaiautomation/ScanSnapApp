@@ -1,4 +1,3 @@
-<!-- src/components/AppHeader.vue -->
 <template>
   <div class="header">
     <div class="header-content">
@@ -9,7 +8,17 @@
       <div class="logo-center">
         <img class="logo-text" :src="isDark ? '/text_1024_dark.png' : '/text_1024_light.png'" alt="ScanSnap" />
       </div>
-      <button class="theme-toggle" @click="$emit('toggle-theme')">{{ isDark ? 'Light' : 'Dark' }}</button>
+      
+      <!-- User info and subscription badge -->
+      <div class="header-right">
+        <div v-if="userData" class="user-info">
+          <span class="subscription-badge" :class="subscriptionStatus">
+            {{ subscriptionStatus.toUpperCase() }}
+          </span>
+          <span class="user-name">{{ userData.first_name || userData.email }}</span>
+        </div>
+        <button class="theme-toggle" @click="$emit('toggle-theme')">{{ isDark ? 'Light' : 'Dark' }}</button>
+      </div>
     </div>
   </div>
 </template>
@@ -17,6 +26,8 @@
 <script setup lang="ts">
 defineProps<{
   isDark: boolean
+  userData?: any
+  subscriptionStatus?: string
 }>()
 
 defineEmits<{
@@ -25,10 +36,50 @@ defineEmits<{
 </script>
 
 <style scoped>
-.header{ height: var(--headerH); display:flex; align-items:center; border-bottom: 1px solid var(--edge); }
-.header-content{ position:relative; display:flex; align-items:center; justify-content:space-between; width:100%; }
-.logo{ display:flex; align-items:center; gap:.5rem; }
-.logo-icon{ height: var(--logoH); max-height: calc(var(--headerH) - 24px); object-fit: contain; }
-.logo-center{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
-.logo-text{ height: calc(var(--logoH) * 1.3); max-height: calc(var(--headerH) - 20px); object-fit: contain; }
+/* ... existing styles ... */
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+}
+
+.subscription-badge {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.subscription-badge.basic {
+  background: #6b7280;
+  color: white;
+}
+
+.subscription-badge.plus {
+  background: #3b82f6;
+  color: white;
+}
+
+.subscription-badge.pro {
+  background: #8b5cf6;
+  color: white;
+}
+
+.subscription-badge.pro_dpms {
+  background: #ec4899;
+  color: white;
+}
+
+.user-name {
+  color: var(--text-dim);
+}
 </style>
