@@ -1,4 +1,4 @@
-<!-- src/App.vue - REFACTORED VERSION -->
+<!-- src/App.vue - REFACTORED VERSION WITH SCANNER MODE -->
 <template>
   <div class="container">
     <!-- Header -->
@@ -9,38 +9,61 @@
 
     <!-- SCAN TAB -->
     <div v-if="tab==='scan'" class="panel">
-      <!-- Scanner Controls -->
-      <ScannerControls 
-        :scanning="scanning"
-        :devices="devices"
-        :selectedDeviceId="selectedDeviceId"
-        :manualCode="manualCode"
-        @toggle-camera="toggleCamera"
-        @request-permission="requestPermission"
-        @device-change="onDeviceChange"
-        @update:manualCode="manualCode = $event"
-        @process-manual-code="processManualCode"
-      />
+      <!-- Camera Mode -->
+      <template v-if="scannerMode === 'camera'">
+        <!-- Scanner Controls -->
+        <ScannerControls 
+          :scanning="scanning"
+          :devices="devices"
+          :selectedDeviceId="selectedDeviceId"
+          :manualCode="manualCode"
+          @toggle-camera="toggleCamera"
+          @request-permission="requestPermission"
+          @device-change="onDeviceChange"
+          @update:manualCode="manualCode = $event"
+          @process-manual-code="processManualCode"
+        />
 
-      <!-- Camera View -->
-      <CameraView
-        ref="cameraViewRef"
-        :scanning="scanning"
-        :torchSupported="torchSupported"
-        :torchOn="torchOn"
-        :toast="toast"
-        :cameraConstraints="cameraConstraints"
-        :activeFormats="activeFormats"
-        :paintTrack="paintTrack"
-        @toggle-torch="toggleTorch"
-        @camera-ready="onCameraReady"
-        @error="onError"
-      />
+        <!-- Camera View -->
+        <CameraView
+          ref="cameraViewRef"
+          :scanning="scanning"
+          :torchSupported="torchSupported"
+          :torchOn="torchOn"
+          :toast="toast"
+          :cameraConstraints="cameraConstraints"
+          :activeFormats="activeFormats"
+          :paintTrack="paintTrack"
+          @toggle-torch="toggleTorch"
+          @camera-ready="onCameraReady"
+          @error="onError"
+        />
 
-      <!-- Tap-to-add -->
-      <div class="row" style="margin-top:8px">
-        <button class="btn" style="flex:1" :disabled="!canTap" @click="tapToAdd">{{ tapLabel }}</button>
-      </div>
+        <!-- Tap-to-add -->
+        <div class="row" style="margin-top:8px">
+          <button class="btn" style="flex:1" :disabled="!canTap" @click="tapToAdd">{{ tapLabel }}</button>
+        </div>
+      </template>
+
+      <!-- External Scanner Mode -->
+      <template v-else>
+        <ExternalScannerInput
+          :enabled="tab === 'scan' && scannerMode === 'external'"
+          @scanned="handleExternalScan"
+        />
+        
+        <!-- Manual entry still available for external scanners -->
+        <div class="row" style="margin-top:8px">
+          <input 
+            class="input" 
+            v-model="manualCode" 
+            @keyup.enter="processManualCode"
+            placeholder="Or enter barcode manually..." 
+            style="flex:1"
+          />
+          <button class="btn ghost" @click="processManualCode" :disabled="!manualCode.trim()">Add</button>
+        </div>
+      </template>
 
       <!-- Recent + Modes -->
       <div class="mini">
@@ -111,6 +134,7 @@
     <!-- SETUP TAB -->
     <SetupTab
       v-else
+      :scannerMode="scannerMode"
       :validateCD="validateCD"
       :stripCD="stripCD"
       :beep="beep"
@@ -119,6 +143,7 @@
       :formatList="formatList"
       :trims="trims"
       :enabled="enabled"
+      @update:scannerMode="scannerMode = $event"
       @update:validateCD="validateCD = $event"
       @update:stripCD="stripCD = $event"
       @update:beep="beep = $event"
@@ -148,6 +173,7 @@ import AppHeader from './components/AppHeader.vue'
 import TabNavigation from './components/TabNavigation.vue'
 import ScannerControls from './components/ScannerControls.vue'
 import CameraView from './components/CameraView.vue'
+import ExternalScannerInput from './components/ExternalScannerInput.vue'
 import QuickListMode from './components/QuickListMode.vue'
 import VerifyMode from './components/VerifyMode.vue'
 import BuilderMode from './components/BuilderMode.vue'
@@ -156,7 +182,7 @@ import SetupTab from './components/SetupTab.vue'
 
 /* LocalStorage keys */
 const LS = {
-  tab:'ui.tab', mode:'ui.mode',
+  tab:'ui.tab', mode:'ui.mode', scannerMode:'ui.scannerMode',
   quick:'data.quickList', verify:'data.verifyRows', builder:'data.builder',
   catalog:'data.catalog', barcodeCol:'catalog.barcodeCol', descCol:'catalog.descCol',
   enabled:'setup.enabled', trims:'setup.trims', stripCD:'setup.stripCD',
@@ -172,8 +198,10 @@ function toggleTheme(){ isDark.value = !isDark.value }
 /* Tabs & Modes */
 const tab = ref<'scan'|'catalog'|'setup'>((localStorage.getItem(LS.tab) as any) || 'scan')
 const mode = ref<'quick'|'verify'|'builder'>((localStorage.getItem(LS.mode) as any) || 'quick')
+const scannerMode = ref<'camera'|'external'>((localStorage.getItem(LS.scannerMode) as any) || 'camera')
 watch(tab,  v => localStorage.setItem(LS.tab,  v))
 watch(mode, v => localStorage.setItem(LS.mode, v))
+watch(scannerMode, v => localStorage.setItem(LS.scannerMode, v))
 function setMode(m: typeof mode.value){ mode.value = m }
 
 /* Camera & devices */
@@ -544,6 +572,35 @@ function processManualCode() {
   manualCode.value = ''
 }
 
+function handleExternalScan(code: string) {
+  // Process external scanner input
+  let processedCode = code.trim()
+  
+  // Try to detect format and apply processing
+  let detectedFormat: Format | undefined = undefined
+  if (/^\d{13}$/.test(processedCode)) {
+    detectedFormat = 'ean_13'
+  } else if (/^\d{12}$/.test(processedCode)) {
+    detectedFormat = 'upc_a'
+  } else if (/^\d{8}$/.test(processedCode)) {
+    detectedFormat = 'ean_8'
+  } else if (/^\d{7}$/.test(processedCode)) {
+    detectedFormat = 'upc_e'
+  }
+  
+  if (detectedFormat) {
+    if (validateCD.value && !validateCheckDigit(processedCode, detectedFormat)) {
+      showToast(`❌ Invalid check digit for ${processedCode}`)
+      return
+    }
+    processedCode = applyTrims(processedCode, detectedFormat, trims)
+    processedCode = stripCheckDigit(processedCode, detectedFormat, stripCD.value)
+  }
+  
+  commitCode(processedCode)
+  showToast(`✔ Scanned ${processedCode}`)
+}
+
 function setBuilderDesc(code:string, desc:string){
   const cur = builder.get(code) || { qty:0, desc:'' }
   builder.set(code, { ...cur, desc })
@@ -628,6 +685,7 @@ function playBeep(){ const Ctx = (window.AudioContext || (window as any).webkitA
   border:1px solid var(--muted);background:var(--brand);color:#fff;
   padding:10px 14px;border-radius:12px;cursor:pointer
 }
+.btn.ghost{background:transparent;color:var(--text)}
 
 .mini{display:flex;align-items:center;gap:8px;margin:8px 0}
 .kbd{border:1px solid var(--muted);border-radius:6px;padding:4px 6px;background:var(--panel2);color:var(--text)}
@@ -645,4 +703,9 @@ function playBeep(){ const Ctx = (window.AudioContext || (window as any).webkitA
 }
 .tab.active{outline:2px solid var(--brand);background:transparent}
 :root.light .tab.active{ border-color: var(--brand); }
+
+.input{
+  border:1px solid var(--muted);background:var(--panel2);
+  border-radius:10px;padding:10px;color:var(--text);max-width:100%;
+}
 </style>
