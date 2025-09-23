@@ -8,108 +8,118 @@
     <TabNavigation v-model="tab" />
 
     <!-- SCAN TAB -->
-    <div v-if="tab==='scan'" class="panel">
-      <!-- Camera Mode -->
-      <template v-if="scannerMode === 'camera'">
-        <!-- Scanner Controls -->
-        <ScannerControls 
-          :scanning="scanning"
-          :devices="devices"
-          :selectedDeviceId="selectedDeviceId"
-          :manualCode="manualCode"
-          @toggle-camera="toggleCamera"
-          @request-permission="requestPermission"
-          @device-change="onDeviceChange"
-          @update:manualCode="manualCode = $event"
-          @process-manual-code="processManualCode"
-        />
+    <div v-if="tab==='scan'" class="panel scan-panel">
+      <div class="scan-layout">
+        <!-- LEFT SIDE: Camera/Scanner -->
+        <div class="scan-left">
+          <!-- Camera Mode -->
+          <template v-if="scannerMode === 'camera'">
+            <!-- Scanner Controls -->
+            <ScannerControls 
+              :scanning="scanning"
+              :devices="devices"
+              :selectedDeviceId="selectedDeviceId"
+              :manualCode="manualCode"
+              @toggle-camera="toggleCamera"
+              @request-permission="requestPermission"
+              @device-change="onDeviceChange"
+              @update:manualCode="manualCode = $event"
+              @process-manual-code="processManualCode"
+            />
 
-        <!-- Camera View -->
-        <CameraView
-          ref="cameraViewRef"
-          :scanning="scanning"
-          :torchSupported="torchSupported"
-          :torchOn="torchOn"
-          :toast="toast"
-          :cameraConstraints="cameraConstraints"
-          :activeFormats="activeFormats"
-          :paintTrack="paintTrack"
-          @toggle-torch="toggleTorch"
-          @camera-ready="onCameraReady"
-          @error="onError"
-        />
+            <!-- Camera View -->
+            <CameraView
+              ref="cameraViewRef"
+              :scanning="scanning"
+              :torchSupported="torchSupported"
+              :torchOn="torchOn"
+              :toast="toast"
+              :cameraConstraints="cameraConstraints"
+              :activeFormats="activeFormats"
+              :paintTrack="paintTrack"
+              @toggle-torch="toggleTorch"
+              @camera-ready="onCameraReady"
+              @error="onError"
+            />
 
-        <!-- Tap-to-add -->
-        <div class="row" style="margin-top:8px">
-          <button class="btn" style="flex:1" :disabled="!canTap" @click="tapToAdd">{{ tapLabel }}</button>
+            <!-- Tap-to-add -->
+            <div class="row" style="margin-top:8px">
+              <button class="btn" style="flex:1" :disabled="!canTap" @click="tapToAdd">{{ tapLabel }}</button>
+            </div>
+          </template>
+
+          <!-- External Scanner Mode -->
+          <template v-else>
+            <ExternalScannerInput
+              :enabled="tab === 'scan' && scannerMode === 'external'"
+              @scanned="handleExternalScan"
+            />
+            
+            <!-- Manual entry still available for external scanners -->
+            <div class="row" style="margin-top:8px">
+              <input 
+                class="input" 
+                v-model="manualCode" 
+                @keyup.enter="processManualCode"
+                placeholder="Or enter barcode manually..." 
+                style="flex:1"
+              />
+              <button class="btn ghost" @click="processManualCode" :disabled="!manualCode.trim()">Add</button>
+            </div>
+          </template>
         </div>
-      </template>
 
-      <!-- External Scanner Mode -->
-      <template v-else>
-        <ExternalScannerInput
-          :enabled="tab === 'scan' && scannerMode === 'external'"
-          @scanned="handleExternalScan"
-        />
-        
-        <!-- Manual entry still available for external scanners -->
-        <div class="row" style="margin-top:8px">
-          <input 
-            class="input" 
-            v-model="manualCode" 
-            @keyup.enter="processManualCode"
-            placeholder="Or enter barcode manually..." 
-            style="flex:1"
-          />
-          <button class="btn ghost" @click="processManualCode" :disabled="!manualCode.trim()">Add</button>
+        <!-- RIGHT SIDE: Modes and Data -->
+        <div class="scan-right">
+          <!-- Recent + Modes -->
+          <div class="mini">
+            <span class="kbd">Recent</span>
+            <span style="font-weight:700">{{ last.code || '—' }}</span>
+            <template v-if="last.code">
+              <button class="icon-btn" @click="decLast">−</button>
+              <span>{{ last.qty }}</span>
+              <button class="icon-btn" @click="incLast">＋</button>
+            </template>
+          </div>
+          <div class="chips" style="margin-top:6px">
+            <button class="tab" :class="{active:mode==='quick'}" @click="setMode('quick')">QUICK LIST</button>
+            <button class="tab" :class="{active:mode==='verify'}" @click="setMode('verify')">CATALOG VERIFY</button>
+            <button class="tab" :class="{active:mode==='builder'}" @click="setMode('builder')">ORDER BUILDER</button>
+          </div>
+
+          <!-- Mode Components -->
+          <div class="mode-content">
+            <QuickListMode
+              v-if="mode==='quick'"
+              :entries="quickEntries"
+              @change-qty="(code, delta) => changeQty('quick', code, delta)"
+              @remove-item="(code) => removeItem('quick', code)"
+              @export="(type) => exportQuick(type)"
+              @clear="clearMode('quick')"
+            />
+
+            <VerifyMode
+              v-if="mode==='verify'"
+              :verifyRows="verifyRows"
+              @remove-verify="removeVerify"
+              @export="(type) => exportVerify(type)"
+              @clear="clearMode('verify')"
+            />
+
+            <BuilderMode
+              v-if="mode==='builder'"
+              :builderRows="builderRows"
+              @set-desc="setBuilderDesc"
+              @focus-desc="editingCode = $event"
+              @blur-desc="onDescBlur"
+              @change-qty="(code, delta) => changeQty('builder', code, delta)"
+              @remove-item="(code) => removeItem('builder', code)"
+              @export="(type) => exportBuilder(type)"
+              @clear="clearMode('builder')"
+            />
+          </div>
         </div>
-      </template>
-
-      <!-- Recent + Modes -->
-      <div class="mini">
-        <span class="kbd">Recent</span>
-        <span style="font-weight:700">{{ last.code || '—' }}</span>
-        <template v-if="last.code">
-          <button class="icon-btn" @click="decLast">−</button>
-          <span>{{ last.qty }}</span>
-          <button class="icon-btn" @click="incLast">＋</button>
-        </template>
       </div>
-      <div class="chips" style="margin-top:6px">
-        <button class="tab" :class="{active:mode==='quick'}" @click="setMode('quick')">QUICK LIST</button>
-        <button class="tab" :class="{active:mode==='verify'}" @click="setMode('verify')">CATALOG VERIFY</button>
-        <button class="tab" :class="{active:mode==='builder'}" @click="setMode('builder')">ORDER BUILDER</button>
-      </div>
-
-      <!-- Mode Components -->
-      <QuickListMode
-        v-if="mode==='quick'"
-        :entries="quickEntries"
-        @change-qty="(code, delta) => changeQty('quick', code, delta)"
-        @remove-item="(code) => removeItem('quick', code)"
-        @export="(type) => exportQuick(type)"
-        @clear="clearMode('quick')"
-      />
-
-      <VerifyMode
-        v-if="mode==='verify'"
-        :verifyRows="verifyRows"
-        @remove-verify="removeVerify"
-        @export="(type) => exportVerify(type)"
-        @clear="clearMode('verify')"
-      />
-
-      <BuilderMode
-        v-if="mode==='builder'"
-        :builderRows="builderRows"
-        @set-desc="setBuilderDesc"
-        @focus-desc="editingCode = $event"
-        @blur-desc="onDescBlur"
-        @change-qty="(code, delta) => changeQty('builder', code, delta)"
-        @remove-item="(code) => removeItem('builder', code)"
-        @export="(type) => exportBuilder(type)"
-        @clear="clearMode('builder')"
-      />
     </div>
 
     <!-- CATALOG TAB -->
@@ -707,5 +717,64 @@ function playBeep(){ const Ctx = (window.AudioContext || (window as any).webkitA
 .input{
   border:1px solid var(--muted);background:var(--panel2);
   border-radius:10px;padding:10px;color:var(--text);max-width:100%;
+}
+
+/* Desktop side-by-side layout for SCAN tab */
+@media (min-width: 1024px) {
+  .scan-panel {
+    height: calc(100vh - var(--headerH) - 100px);
+    overflow: hidden;
+  }
+  
+  .scan-layout {
+    display: flex;
+    gap: 20px;
+    height: 100%;
+  }
+  
+  .scan-left {
+    flex: 0 0 50%;
+    display: flex;
+    flex-direction: column;
+    min-width: 400px;
+  }
+  
+  .scan-right {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+  }
+  
+  .mode-content {
+    flex: 1;
+    overflow-y: auto;
+    margin-top: 10px;
+    padding-right: 10px;
+  }
+  
+  /* Adjust camera view for desktop */
+  .scan-left :deep(.video) {
+    height: calc(100vh - 350px);
+    max-height: 500px;
+    aspect-ratio: unset;
+  }
+}
+
+/* Mobile layout - unchanged */
+@media (max-width: 1023px) {
+  .scan-layout {
+    display: block;
+  }
+  
+  .scan-left,
+  .scan-right {
+    width: 100%;
+  }
+  
+  .mode-content {
+    margin-top: 10px;
+  }
 }
 </style>

@@ -55,8 +55,24 @@ defineExpose({ videoBox })
   position:relative;width:100%;aspect-ratio:16/9;
   border:1px solid var(--muted);border-radius:12px;overflow:hidden;background:#000
 }
+
+/* Desktop: Full height camera view */
+@media (min-width: 1024px) {
+  .video {
+    aspect-ratio: unset;
+    height: 100%;
+    min-height: 400px;
+  }
+}
+
 :deep(canvas){ position:absolute; inset:0; z-index:3; }
-:deep(video){ position:relative; z-index:1; }
+:deep(video){ 
+  position:relative; 
+  z-index:1; 
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 
 .icon-btn{
   display:inline-grid;place-items:center;width:36px;height:36px;border-radius:10px;
