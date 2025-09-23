@@ -2,7 +2,7 @@
 <template>
   <div class="panel">
     <h3>Scanner Input Mode</h3>
-    <div class="row" style="margin-bottom:15px">
+    <div class="scanner-mode-options" style="margin-bottom:15px">
       <label class="radio-option">
         <input 
           type="radio" 
@@ -11,8 +11,10 @@
           :checked="scannerMode === 'camera'"
           @change="$emit('update:scannerMode', 'camera')"
         />
-        <span class="radio-label">📷 Built-in Camera</span>
-        <span class="radio-desc">Use device camera for scanning</span>
+        <span class="radio-content">
+          <span class="radio-label">📷 Built-in Camera</span>
+          <span class="radio-desc">Use device camera</span>
+        </span>
       </label>
       <label class="radio-option">
         <input 
@@ -22,8 +24,10 @@
           :checked="scannerMode === 'external'"
           @change="$emit('update:scannerMode', 'external')"
         />
-        <span class="radio-label">🔌 External Scanner</span>
-        <span class="radio-desc">USB/Bluetooth barcode reader</span>
+        <span class="radio-content">
+          <span class="radio-label">🔌 External Scanner</span>
+          <span class="radio-desc">USB/Bluetooth reader</span>
+        </span>
       </label>
     </div>
 
@@ -155,6 +159,13 @@ function updateEnabled(format: Format, event: Event) {
   .table.setup th:nth-child(4), .table.setup td:nth-child(4){width:18%}
 }
 
+/* Scanner Mode Options Container */
+.scanner-mode-options {
+  display: flex;
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+
 /* Radio option styles */
 .radio-option {
   display: flex;
@@ -167,6 +178,7 @@ function updateEnabled(format: Format, event: Event) {
   transition: all 0.2s;
   flex: 1;
   position: relative;
+  min-width: 0;
 }
 
 .radio-option:hover {
@@ -178,34 +190,85 @@ function updateEnabled(format: Format, event: Event) {
   left: 12px;
   top: 50%;
   transform: translateY(-50%);
+  flex-shrink: 0;
+}
+
+.radio-content {
+  display: flex;
+  flex-direction: column;
+  margin-left: 24px;
+  min-width: 0;
 }
 
 .radio-label {
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 500;
   color: var(--text);
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-left: 28px;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .radio-desc {
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   color: var(--muted);
-  margin-left: 28px;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.radio-option input[type="radio"]:checked ~ .radio-label {
+.radio-option input[type="radio"]:checked ~ .radio-content .radio-label {
   color: var(--brand);
   font-weight: 600;
 }
 
-.radio-option input[type="radio"]:checked ~ .radio-desc {
+.radio-option input[type="radio"]:checked ~ .radio-content .radio-desc {
   color: var(--text);
 }
 
 .radio-option input[type="radio"]:checked {
   accent-color: var(--brand);
+}
+
+/* Mobile adjustments */
+@media (max-width: 480px) {
+  .scanner-mode-options {
+    flex-direction: column;
+  }
+  
+  .radio-option {
+    width: 100%;
+    padding: 10px;
+  }
+  
+  .radio-content {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+  }
+  
+  .radio-label {
+    font-size: 0.9rem;
+  }
+  
+  .radio-desc {
+    font-size: 0.7rem;
+    margin-top: 0;
+    margin-left: 8px;
+    flex-shrink: 0;
+  }
+}
+
+@media (max-width: 360px) {
+  .radio-label {
+    font-size: 0.85rem;
+  }
+  
+  .radio-desc {
+    display: none; /* Hide description on very small screens */
+  }
 }
 </style>
