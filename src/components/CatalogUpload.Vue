@@ -1,4 +1,4 @@
-<!-- src/components/CatalogUpload.vue -->
+<!-- /src/components/CatalogUpload.vue -->
 <template>
   <div class="catalog-upload">
     <div class="tabs">
@@ -22,8 +22,8 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { parseCSVObjects, pick, toNumberSafe } from '../utils/csv';
-import type { VerifyCatalogRow, OrderRow } from '../types/catalog';
+import { parseCSVObjects, pick, toNumberSafe } from '@/utils/csv';
+import type { VerifyCatalogRow, OrderRow } from '@/types/catalog';
 
 const emit = defineEmits<{
   (e: 'verify-loaded', rows: VerifyCatalogRow[]): void;

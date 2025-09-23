@@ -1,12 +1,12 @@
-
+[build]
   command = "npm run build"
   publish = "dist"
 
 [build.environment]
   NODE_VERSION = "20"
 
-# Optional: don't accidentally block camera in prod
 [[headers]]
   for = "/*"
   [headers.values]
     Permissions-Policy = "camera=(self)"
+

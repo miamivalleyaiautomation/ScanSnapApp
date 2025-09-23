@@ -1,4 +1,4 @@
-<!-- src/App.vue -->
+<!-- FILE: src/App.vue -->
 <template>
   <main class="app">
     <header class="top">
@@ -8,9 +8,6 @@
         <button :class="{active: tab==='scanner'}" @click="tab='scanner'">Scanner</button>
       </nav>
     </header>
-
-    <!-- Add Manual Entry Component here - always visible -->
-    <ManualBarcodeEntry @barcode-scanned="handleManualScan" />
 
     <section v-if="tab==='verify'">
       <VerifyTab ref="verifyRef" />
@@ -32,21 +29,10 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import VerifyTab from './components/VerifyTab.vue';
-import ManualBarcodeEntry from './components/ManualBarcodeEntry.vue';
 
 const tab = ref<'verify'|'scanner'>('verify');
 const verifyRef = ref<InstanceType<typeof VerifyTab> | null>(null);
 const manual = ref(''); const manualQty = ref(1);
-
-// Handle scans from the global manual entry component
-function handleManualScan(barcode: string, qty: number) {
-  // Send to verify tab when it's active
-  if (tab.value === 'verify') {
-    verifyRef.value?.handleScan(barcode, qty);
-  }
-  // Later you can add logic for other tabs/modes
-}
-
 function pushManual() {
   if (!manual.value) return;
   verifyRef.value?.handleScan(manual.value, Math.max(1, manualQty.value || 1));

@@ -1,6 +1,6 @@
 import { reactive, computed } from 'vue';
-import type { VerifyCatalogRow, OrderRow, VerifyRow, Status } from '../types/catalog';
-import { exportVerifyCSV, exportVerifyPDF } from '../utils/exporters';
+import type { VerifyCatalogRow, OrderRow, VerifyRow, Status } from '@/types/catalog';
+import { exportVerifyCSV, exportVerifyPDF } from '@/utils/exporters';
 
 type State = {
   verifyCatalog: Map<string, number>;
