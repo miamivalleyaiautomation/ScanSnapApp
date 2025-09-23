@@ -62,8 +62,8 @@
 import { ref, computed, defineExpose } from 'vue';
 import StatusBadge from './StatusBadge.vue';
 import CatalogUpload from './CatalogUpload.vue';
-import { useVerifyStore } from '@/stores/verifyStore';
-import type { Status } from '@/types/catalog';
+import { useVerifyStore } from '../stores/verifyStore';  // Changed from '@/stores/verifyStore'
+import type { Status } from '../types/catalog';  // Changed from '@/types/catalog'
 
 const store = useVerifyStore();
 const rows = computed(() => store.rows.value);
