@@ -17,6 +17,7 @@ class AuthService {
   private sessionToken: string | null = null
 
   constructor() {
+    // Use Vite's import.meta.env for Vue/Vite apps
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
     
@@ -24,6 +25,7 @@ class AuthService {
       this.supabase = createClient(supabaseUrl, supabaseAnonKey)
     }
     
+    // Initialize on construction
     this.initializeAuth()
   }
 
@@ -36,12 +38,12 @@ class AuthService {
     if (token && userId) {
       // Store token and fetch user data
       this.sessionToken = token
-      await this.fetchUserProfile(userId, token)
+      await this.fetchUserProfile(userId)
       
-      // Clean URL
+      // Clean URL without reloading
       window.history.replaceState({}, document.title, window.location.pathname)
     } else {
-      // Try to restore from sessionStorage (more secure than localStorage)
+      // Try to restore from sessionStorage
       const stored = sessionStorage.getItem('scansnap_session')
       if (stored) {
         try {
@@ -49,22 +51,29 @@ class AuthService {
           if (data.expiresAt > Date.now()) {
             this.userData = data.userData
             this.sessionToken = data.token
-            await this.verifySession()
+            // Optionally verify the session is still valid
+            if (this.userData?.clerk_user_id) {
+              await this.verifySession()
+            }
           } else {
             this.clearSession()
           }
-        } catch {
+        } catch (e) {
+          console.error('Failed to parse session:', e)
           this.clearSession()
         }
       }
     }
   }
 
-  async fetchUserProfile(userId: string, token: string): Promise<boolean> {
-    if (!this.supabase) return false
+  async fetchUserProfile(userId: string): Promise<boolean> {
+    if (!this.supabase) {
+      console.error('Supabase client not initialized')
+      return false
+    }
     
     try {
-      // Verify token and fetch user profile
+      // Fetch user profile from Supabase
       const { data, error } = await this.supabase
         .from('user_profiles')
         .select('*')
@@ -109,7 +118,7 @@ class AuthService {
     if (!this.userData || !this.sessionToken) return false
     
     // Re-fetch user data to ensure it's current
-    return await this.fetchUserProfile(this.userData.clerk_user_id, this.sessionToken)
+    return await this.fetchUserProfile(this.userData.clerk_user_id)
   }
 
   storeSession() {
@@ -147,14 +156,14 @@ class AuthService {
     if (status === 'expired' || status === 'cancelled') return false
     
     // Check subscription hierarchy
-    const hierarchy = {
+    const hierarchy: Record<string, number> = {
       'basic': 0,
       'plus': 1,
       'pro': 2,
       'pro_dpms': 3
     }
     
-    const userLevel = hierarchy[status as keyof typeof hierarchy] || 0
+    const userLevel = hierarchy[status] || 0
     const requiredLevel = hierarchy[level] || 0
     
     return userLevel >= requiredLevel
@@ -177,16 +186,18 @@ class AuthService {
     return this.hasSubscription(requiredLevel)
   }
 
-  async redirectToLogin() {
+  redirectToLogin() {
     const mainSiteUrl = import.meta.env.VITE_MAIN_SITE_URL || 'https://scansnap.io'
     const returnUrl = encodeURIComponent(window.location.href)
     window.location.href = `${mainSiteUrl}/login?redirect_url=/dashboard&app_return=${returnUrl}`
   }
 
-  async redirectToUpgrade() {
+  redirectToUpgrade() {
     const mainSiteUrl = import.meta.env.VITE_MAIN_SITE_URL || 'https://scansnap.io'
     window.location.href = `${mainSiteUrl}/subscription`
   }
 }
 
-export default new AuthService()
+// Create singleton instance
+const authService = new AuthService()
+export default authService

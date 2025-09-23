@@ -1,8 +1,13 @@
-<!-- src/App.vue - REFACTORED VERSION WITH SCANNER MODE -->
+<!-- src/App.vue - COMPLETE FILE WITH AUTHENTICATION -->
 <template>
   <div class="container">
-    <!-- Header -->
-    <AppHeader :isDark="isDark" @toggle-theme="toggleTheme" />
+    <!-- Header with user info -->
+    <AppHeader 
+      :isDark="isDark" 
+      :userData="userData"
+      :subscriptionStatus="subscriptionStatus"
+      @toggle-theme="toggleTheme" 
+    />
 
     <!-- Tabs -->
     <TabNavigation v-model="tab" />
@@ -81,10 +86,40 @@
               <button class="icon-btn" @click="incLast">＋</button>
             </template>
           </div>
+          
+          <!-- Mode tabs with subscription locks -->
           <div class="chips" style="margin-top:6px">
-            <button class="tab" :class="{active:mode==='quick'}" @click="setMode('quick')">QUICK LIST</button>
-            <button class="tab" :class="{active:mode==='verify'}" @click="setMode('verify')">CATALOG VERIFY</button>
-            <button class="tab" :class="{active:mode==='builder'}" @click="setMode('builder')">ORDER BUILDER</button>
+            <button class="tab" :class="{active:mode==='quick'}" @click="setMode('quick')">
+              QUICK LIST
+            </button>
+            <button 
+              class="tab" 
+              :class="{active:mode==='verify', locked:!canUseVerifyMode}" 
+              @click="setMode('verify')"
+              :title="!canUseVerifyMode ? 'Requires Plus subscription' : ''"
+            >
+              CATALOG VERIFY
+              <span v-if="!canUseVerifyMode" class="lock-icon">🔒</span>
+            </button>
+            <button 
+              class="tab" 
+              :class="{active:mode==='builder', locked:!canUseOrderBuilder}" 
+              @click="setMode('builder')"
+              :title="!canUseOrderBuilder ? 'Requires Plus subscription' : ''"
+            >
+              ORDER BUILDER
+              <span v-if="!canUseOrderBuilder" class="lock-icon">🔒</span>
+            </button>
+          </div>
+
+          <!-- Subscription notice -->
+          <div v-if="!isAuthenticated" class="subscription-notice">
+            <p>🔒 Sign in to unlock all features</p>
+            <button class="btn primary" @click="redirectToLogin">Sign In</button>
+          </div>
+          <div v-else-if="subscriptionStatus === 'basic' && (mode === 'verify' || mode === 'builder')" class="subscription-notice">
+            <p>⚡ Upgrade to Plus to use this feature</p>
+            <button class="btn primary" @click="redirectToUpgrade">Upgrade Now</button>
           </div>
 
           <!-- Mode Components -->
@@ -133,12 +168,14 @@
       :searchBarcode="searchBarcode"
       :importStats="importStats"
       :filteredCatalog="filteredCatalog"
+      :canUseCatalog="canUseCatalog"
       @file-change="onFile"
       @update:barcodeCol="barcodeCol = $event"
       @update:descCol="descCol = $event"
       @update:search="search = $event"
       @update:searchBarcode="searchBarcode = $event"
       @clear-catalog="clearCatalog"
+      @upgrade="redirectToUpgrade"
     />
 
     <!-- SETUP TAB -->
@@ -153,6 +190,8 @@
       :formatList="formatList"
       :trims="trims"
       :enabled="enabled"
+      :canUseQRCode="canUseQRCode"
+      :canUseDataMatrix="canUseDataMatrix"
       @update:scannerMode="scannerMode = $event"
       @update:validateCD="validateCD = $event"
       @update:stripCD="stripCD = $event"
@@ -170,7 +209,6 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import authService from './services/auth.service'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import { exportCSV, exportXLSX, exportPDF } from './utils/exporters'
@@ -178,6 +216,7 @@ import {
   ALL_FORMATS, DEFAULT_TRIMS, LINEAR_GROUP, MATRIX_GROUP,
   type Format, type TrimRules, stripCheckDigit, validateCheckDigit, applyTrims
 } from './utils/barcode'
+import authService from './services/auth.service'
 
 // Import components
 import AppHeader from './components/AppHeader.vue'
@@ -190,6 +229,11 @@ import VerifyMode from './components/VerifyMode.vue'
 import BuilderMode from './components/BuilderMode.vue'
 import CatalogTab from './components/CatalogTab.vue'
 import SetupTab from './components/SetupTab.vue'
+
+/* Authentication State */
+const isAuthenticated = ref(false)
+const userData = ref<any>(null)
+const subscriptionStatus = ref<string>('basic')
 
 /* LocalStorage keys */
 const LS = {
@@ -206,6 +250,22 @@ watch(isDark, v => { document.documentElement.classList.toggle('light', !v); loc
 document.documentElement.classList.toggle('light', !isDark.value)
 function toggleTheme(){ isDark.value = !isDark.value }
 
+/* Feature availability checks */
+const canUseVerifyMode = computed(() => authService.canUseFeature('verify_mode'))
+const canUseOrderBuilder = computed(() => authService.canUseFeature('order_builder'))
+const canUseCatalog = computed(() => authService.canUseFeature('catalog_import'))
+const canUseQRCode = computed(() => authService.canUseFeature('qr_code'))
+const canUseDataMatrix = computed(() => authService.canUseFeature('data_matrix'))
+
+/* Redirect functions */
+function redirectToLogin() {
+  authService.redirectToLogin()
+}
+
+function redirectToUpgrade() {
+  authService.redirectToUpgrade()
+}
+
 /* Tabs & Modes */
 const tab = ref<'scan'|'catalog'|'setup'>((localStorage.getItem(LS.tab) as any) || 'scan')
 const mode = ref<'quick'|'verify'|'builder'>((localStorage.getItem(LS.mode) as any) || 'quick')
@@ -213,7 +273,34 @@ const scannerMode = ref<'camera'|'external'>((localStorage.getItem(LS.scannerMod
 watch(tab,  v => localStorage.setItem(LS.tab,  v))
 watch(mode, v => localStorage.setItem(LS.mode, v))
 watch(scannerMode, v => localStorage.setItem(LS.scannerMode, v))
-function setMode(m: typeof mode.value){ mode.value = m }
+
+function setMode(m: typeof mode.value) {
+  if (m === 'verify' && !canUseVerifyMode.value) {
+    showToast('❌ Verify Mode requires Plus subscription or higher')
+    if (!isAuthenticated.value) {
+      if (confirm('Sign in to unlock this feature?')) {
+        redirectToLogin()
+      }
+    } else if (confirm('Would you like to upgrade your subscription?')) {
+      redirectToUpgrade()
+    }
+    return
+  }
+  
+  if (m === 'builder' && !canUseOrderBuilder.value) {
+    showToast('❌ Order Builder requires Plus subscription or higher')
+    if (!isAuthenticated.value) {
+      if (confirm('Sign in to unlock this feature?')) {
+        redirectToLogin()
+      }
+    } else if (confirm('Would you like to upgrade your subscription?')) {
+      redirectToUpgrade()
+    }
+    return
+  }
+  
+  mode.value = m
+}
 
 /* Camera & devices */
 const scanning = ref(false)
@@ -285,17 +372,38 @@ watch(stripCD, v => localStorage.setItem(LS.stripCD, v?'1':'0'))
 watch(validateCD, v => localStorage.setItem(LS.validateCD, v?'1':'0'))
 watch(beep, v => localStorage.setItem(LS.beep, v?'1':'0'))
 
-/* Active formats for the camera */
+/* Active formats for the camera - filtered by subscription */
 const activeFormats = computed(() => {
-  const list = formatList.filter(f => enabled[f])
-  return list.length ? list : ['qr_code']
+  let list = formatList.filter(f => enabled[f])
+  
+  // Remove QR codes if not Pro
+  if (!canUseQRCode.value) {
+    list = list.filter(f => !['qr_code', 'micro_qr_code', 'rm_qr_code'].includes(f))
+  }
+  
+  // Remove DataMatrix if not Pro
+  if (!canUseDataMatrix.value) {
+    list = list.filter(f => f !== 'data_matrix')
+  }
+  
+  return list.length ? list : ['ean_13', 'upc_a'] // Default to basic formats
 })
 
 /* Group toggles */
 const linearOn = computed(() => LINEAR_GROUP.every(f => enabled[f]))
 const matrixOn = computed(() => MATRIX_GROUP.every(f => enabled[f]))
 function toggleLinear(e: Event){ const on = (e.target as HTMLInputElement).checked; LINEAR_GROUP.forEach(f => { enabled[f] = on }) }
-function toggleMatrix(e: Event){ const on = (e.target as HTMLInputElement).checked; MATRIX_GROUP.forEach(f => { enabled[f] = on }) }
+function toggleMatrix(e: Event){ 
+  if (!canUseQRCode.value && !canUseDataMatrix.value) {
+    showToast('❌ Matrix codes require Pro subscription')
+    if (confirm('Would you like to upgrade your subscription?')) {
+      redirectToUpgrade()
+    }
+    return
+  }
+  const on = (e.target as HTMLInputElement).checked; 
+  MATRIX_GROUP.forEach(f => { enabled[f] = on }) 
+}
 function enableAll(){ formatList.forEach(f => { enabled[f] = true }) }
 function disableAll(){ formatList.forEach(f => { enabled[f] = false }) }
 function clearAllTrims(){ for (const f of formatList){ trims[f].prefix = 0; trims[f].suffix = 0 } }
@@ -344,6 +452,14 @@ function rebuildCatalogFromSelections(){
 watch([barcodeCol, descCol], rebuildCatalogFromSelections)
 
 async function onFile(e:Event){
+  if (!canUseCatalog.value) {
+    showToast('❌ Catalog import requires Plus subscription')
+    if (confirm('Would you like to upgrade your subscription?')) {
+      redirectToUpgrade()
+    }
+    return
+  }
+  
   const file = (e.target as HTMLInputElement).files?.[0]; if(!file) return
   const ext = file.name.split('.').pop()?.toLowerCase()
   let rows: Record<string, unknown>[] = []
@@ -395,7 +511,23 @@ watch(quickEntries, arr => { localStorage.setItem(LS.quick, JSON.stringify(arr))
 watch(verifyRows, arr => { localStorage.setItem(LS.verify, JSON.stringify(arr)) }, { deep:true })
 watch(builderEntries, arr => { localStorage.setItem(LS.builder, JSON.stringify(arr)) }, { deep:true })
 
-onMounted(() => {
+onMounted(async () => {
+  // Wait a bit for auth service to initialize
+  await new Promise(resolve => setTimeout(resolve, 100))
+  
+  // Check authentication
+  isAuthenticated.value = authService.isAuthenticated()
+  userData.value = authService.getUser()
+  subscriptionStatus.value = userData.value?.subscription_status || 'basic'
+  
+  // Log authentication status
+  console.log('Authentication status:', {
+    isAuthenticated: isAuthenticated.value,
+    user: userData.value,
+    subscription: subscriptionStatus.value
+  })
+  
+  // Load saved data
   try{ const Q = JSON.parse(localStorage.getItem(LS.quick)||'[]') as [string,number][]; for(const [c,q] of Q) quickList.set(c,q) }catch{}
   try{ const V = JSON.parse(localStorage.getItem(LS.verify)||'[]') as {code:string,ok:boolean}[]; verifyRows.splice(0, verifyRows.length, ...(V||[])) }catch{}
   try{ const B = JSON.parse(localStorage.getItem(LS.builder)||'[]') as [string,{qty:number,desc?:string}][]; for(const [c,v] of B) builder.set(c,v) }catch{}
@@ -664,7 +796,7 @@ function exportBuilder(type:'csv'|'xlsx'|'pdf'){
 /* Toast + Beep */
 const toast = reactive({ show:false, text:'' })
 let toastTimer: number | undefined
-function showToast(text:string, ms=900){ toast.text=text; toast.show=true; if(toastTimer) clearTimeout(toastTimer as any); toastTimer = setTimeout(()=>{ toast.show=false }, ms) as any }
+function showToast(text:string, ms=1500){ toast.text=text; toast.show=true; if(toastTimer) clearTimeout(toastTimer as any); toastTimer = setTimeout(()=>{ toast.show=false }, ms) as any }
 function playBeep(){ const Ctx = (window.AudioContext || (window as any).webkitAudioContext) as any; const ctx = new Ctx(); const o = ctx.createOscillator(); const g = ctx.createGain(); o.connect(g); g.connect(ctx.destination); o.frequency.value = 880; g.gain.value = 0.1; o.start(); setTimeout(()=>{ o.stop(); ctx.close() }, 120) }
 </script>
 
@@ -697,6 +829,7 @@ function playBeep(){ const Ctx = (window.AudioContext || (window as any).webkitA
   padding:10px 14px;border-radius:12px;cursor:pointer
 }
 .btn.ghost{background:transparent;color:var(--text)}
+.btn.primary{background:var(--brand);color:#fff}
 
 .mini{display:flex;align-items:center;gap:8px;margin:8px 0}
 .kbd{border:1px solid var(--muted);border-radius:6px;padding:4px 6px;background:var(--panel2);color:var(--text)}
@@ -706,18 +839,44 @@ function playBeep(){ const Ctx = (window.AudioContext || (window as any).webkitA
 }
 
 .chips{display:flex;gap:8px;flex-wrap:nowrap;width:100%}
-.chips .tab{flex:1 1 0}
+.chips .tab{flex:1 1 0;position:relative}
 .tab{
   flex:1 1 0;padding:12px 16px;border-radius:12px;
   border:1px solid var(--pill-border);
   background:var(--panel2);cursor:pointer;text-align:center;color:var(--text)
 }
 .tab.active{outline:2px solid var(--brand);background:transparent}
+.tab.locked{opacity:0.7;cursor:not-allowed}
+.lock-icon{
+  position:absolute;
+  top:4px;
+  right:4px;
+  font-size:0.75rem;
+}
 :root.light .tab.active{ border-color: var(--brand); }
 
 .input{
   border:1px solid var(--muted);background:var(--panel2);
   border-radius:10px;padding:10px;color:var(--text);max-width:100%;
+}
+
+/* Subscription notice */
+.subscription-notice {
+  margin:16px 0;
+  padding:12px;
+  background:rgba(74,144,226,0.1);
+  border:1px solid var(--brand);
+  border-radius:12px;
+  text-align:center;
+}
+.subscription-notice p {
+  margin:0 0 8px 0;
+  color:var(--text);
+  font-weight:500;
+}
+.subscription-notice .btn {
+  font-size:0.9rem;
+  padding:8px 16px;
 }
 
 /* Desktop side-by-side layout for SCAN tab */
