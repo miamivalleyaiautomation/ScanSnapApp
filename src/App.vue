@@ -225,13 +225,21 @@ async function toggleTorch(){
 /* Setup: formats, trims, checks */
 const formatList: Format[] = [...ALL_FORMATS]
 const enabled = reactive<Record<Format, boolean>>(JSON.parse(localStorage.getItem(LS.enabled)||'{}') || {})
-formatList.forEach(f => { if (enabled[f] === undefined) enabled[f] = (f==='qr_code' || f==='code_128' || f==='ean_13' || f==='upc_a') })
+// Enable all linear codes by default (if no saved preferences)
+formatList.forEach(f => { 
+  if (enabled[f] === undefined) {
+    // Enable all linear codes by default
+    enabled[f] = LINEAR_GROUP.includes(f)
+  }
+})
 watch(enabled, () => localStorage.setItem(LS.enabled, JSON.stringify(enabled)), { deep:true })
 
+// Initialize trims - all set to 0 (DEFAULT_TRIMS already has all zeros now)
 const trims = reactive<TrimRules>(Object.assign({}, DEFAULT_TRIMS, JSON.parse(localStorage.getItem(LS.trims)||'{}')))
 watch(trims, () => localStorage.setItem(LS.trims, JSON.stringify(trims)), { deep:true })
 
-const stripCD = ref(localStorage.getItem(LS.stripCD)==='1')
+// Default stripCD to true (strip check digits by default)
+const stripCD = ref(localStorage.getItem(LS.stripCD) !== null ? localStorage.getItem(LS.stripCD)==='1' : true)
 const validateCD = ref(localStorage.getItem(LS.validateCD)==='1')
 const beep = ref(localStorage.getItem(LS.beep)!=='0')
 watch(stripCD, v => localStorage.setItem(LS.stripCD, v?'1':'0'))

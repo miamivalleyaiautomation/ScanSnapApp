@@ -1,5 +1,5 @@
 // FILE: src/utils/barcode.ts
-// Removed: codabar, databar*, itf, maxi_code, pdf417, dx_film_edge
+// Updated with all default trims set to 0
 
 export type Format =
   | 'aztec'
@@ -52,16 +52,11 @@ export const MATRIX_GROUP: Format[] = [
 
 export type TrimRules = Record<Format, { prefix: number; suffix: number }>
 
+// ALL DEFAULT TRIMS SET TO 0
 export const DEFAULT_TRIMS: TrimRules = ALL_FORMATS.reduce((acc, f) => {
   acc[f] = { prefix: 0, suffix: 0 }
   return acc
 }, {} as TrimRules)
-
-// Retail-friendly defaults
-DEFAULT_TRIMS.ean_13 = { prefix: 1, suffix: 1 }
-DEFAULT_TRIMS.upc_a  = { prefix: 1, suffix: 1 }
-DEFAULT_TRIMS.upc_e  = { prefix: 1, suffix: 1 }
-DEFAULT_TRIMS.ean_8  = { prefix: 0, suffix: 0 }
 
 /* ---------- EAN/UPC helpers ---------- */
 export function computeEAN13CheckDigit(code12: string): number {
