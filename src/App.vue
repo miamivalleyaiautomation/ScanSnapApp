@@ -35,6 +35,18 @@
         </select>
       </div>
 
+      <!-- Manual code entry -->
+      <div class="row" style="margin-bottom:8px">
+        <input 
+          class="input" 
+          v-model="manualCode" 
+          @keyup.enter="processManualCode"
+          placeholder="Enter barcode manually..." 
+          style="flex:1"
+        />
+        <button class="btn ghost" @click="processManualCode" :disabled="!manualCode.trim()">Add</button>
+      </div>
+
       <!-- Camera -->
       <div class="video" ref="videoBox">
         <button
@@ -297,6 +309,9 @@ const videoBox = ref<HTMLElement | null>(null)
 const videoTrack = ref<MediaStreamTrack | null>(null)
 const torchSupported = ref(false)
 const torchOn = ref(false)
+
+/* Manual code entry */
+const manualCode = ref('')
 
 const cameraConstraints = computed<MediaTrackConstraints>(() =>
   selectedDeviceId.value ? { deviceId: selectedDeviceId.value } : { facingMode: 'environment' }
@@ -620,6 +635,48 @@ function commitCode(code:string){
     }
   }
 }
+
+function processManualCode() {
+  const raw = manualCode.value.trim()
+  if (!raw) return
+  
+  // Apply the same processing as scanned codes
+  let code = raw
+  
+  // Try to detect format based on code pattern (basic detection for EAN/UPC)
+  let detectedFormat: Format | undefined = undefined
+  if (/^\d{13}$/.test(raw)) {
+    detectedFormat = 'ean_13'
+  } else if (/^\d{12}$/.test(raw)) {
+    detectedFormat = 'upc_a'
+  } else if (/^\d{8}$/.test(raw)) {
+    detectedFormat = 'ean_8'
+  } else if (/^\d{7}$/.test(raw)) {
+    detectedFormat = 'upc_e'
+  }
+  
+  if (detectedFormat) {
+    // Validate check digit if enabled
+    if (validateCD.value && !validateCheckDigit(code, detectedFormat)) {
+      showToast(`❌ Invalid check digit for ${code}`)
+      return
+    }
+    
+    // Apply trims
+    code = applyTrims(code, detectedFormat, trims)
+    
+    // Strip check digit if enabled
+    code = stripCheckDigit(code, detectedFormat, stripCD.value)
+  }
+  
+  // Commit the processed code
+  commitCode(code)
+  showToast(`✔ Added ${code}`)
+  
+  // Clear the input
+  manualCode.value = ''
+}
+
 function setBuilderDesc(code:string, desc:string){
   const cur = builder.get(code) || { qty:0, desc:'' }
   builder.set(code, { ...cur, desc })
