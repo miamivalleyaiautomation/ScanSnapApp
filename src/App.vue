@@ -1,72 +1,41 @@
-<!-- FILE: src/App.vue -->
+<!-- src/App.vue - REFACTORED VERSION -->
 <template>
   <div class="container">
     <!-- Header -->
-    <div class="header">
-      <div class="header-content">
-        <div class="logo">
-          <img v-if="isDark" class="logo-icon" src="/favicon_1024_dark.png" alt="icon" />
-          <img v-else class="logo-icon" src="/favicon_1024_light.png" alt="icon" />
-        </div>
-        <div class="logo-center">
-          <img class="logo-text" :src="isDark ? '/text_1024_dark.png' : '/text_1024_light.png'" alt="ScanSnap" />
-        </div>
-        <button class="theme-toggle" @click="toggleTheme">{{ isDark ? 'Light' : 'Dark' }}</button>
-      </div>
-    </div>
+    <AppHeader :isDark="isDark" @toggle-theme="toggleTheme" />
 
     <!-- Tabs -->
-    <div class="tabs">
-      <button class="tab" :class="{active:tab==='scan'}" @click="tab='scan'">SCAN</button>
-      <button class="tab" :class="{active:tab==='catalog'}" @click="tab='catalog'">CATALOG</button>
-      <button class="tab" :class="{active:tab==='setup'}" @click="tab='setup'">SETUP</button>
-    </div>
+    <TabNavigation v-model="tab" />
 
-    <!-- SCAN -->
+    <!-- SCAN TAB -->
     <div v-if="tab==='scan'" class="panel">
-      <div class="row nowrap" style="margin-bottom:8px">
-        <button class="btn" style="flex:1" @click="toggleCamera">{{ scanning ? 'Stop Camera' : 'Start Camera' }}</button>
-        <button class="btn ghost" style="flex:1" @click="requestPermission">Camera Permission</button>
-      </div>
+      <!-- Scanner Controls -->
+      <ScannerControls 
+        :scanning="scanning"
+        :devices="devices"
+        :selectedDeviceId="selectedDeviceId"
+        :manualCode="manualCode"
+        @toggle-camera="toggleCamera"
+        @request-permission="requestPermission"
+        @device-change="onDeviceChange"
+        @update:manualCode="manualCode = $event"
+        @process-manual-code="processManualCode"
+      />
 
-      <div class="row" style="margin-bottom:8px">
-        <select class="input" v-model="selectedDeviceId" @change="onDeviceChange" style="flex:1">
-          <option v-for="d in devices" :key="d.deviceId" :value="d.deviceId">{{ d.label || 'camera' }}</option>
-        </select>
-      </div>
-
-      <!-- Manual code entry -->
-      <div class="row" style="margin-bottom:8px">
-        <input 
-          class="input" 
-          v-model="manualCode" 
-          @keyup.enter="processManualCode"
-          placeholder="Enter barcode manually..." 
-          style="flex:1"
-        />
-        <button class="btn ghost" @click="processManualCode" :disabled="!manualCode.trim()">Add</button>
-      </div>
-
-      <!-- Camera -->
-      <div class="video" ref="videoBox">
-        <button
-          v-if="scanning && torchSupported"
-          class="icon-btn"
-          style="position:absolute;top:8px;left:8px;z-index:4"
-          :style="torchOn ? 'background:var(--brand);color:#fff;border-color:transparent' : ''"
-          @click="toggleTorch" :title="torchOn ? 'Torch Off' : 'Torch On'" aria-label="Toggle torch">🔦</button>
-
-        <div v-if="toast.show" class="toast" role="status" aria-live="polite">{{ toast.text }}</div>
-
-        <QrcodeStream
-          v-if="scanning"
-          :constraints="cameraConstraints"
-          :formats="activeFormats"
-          :track="paintTrack"
-          @camera-on="onCameraReady"
-          @error="onError"
-        />
-      </div>
+      <!-- Camera View -->
+      <CameraView
+        ref="cameraViewRef"
+        :scanning="scanning"
+        :torchSupported="torchSupported"
+        :torchOn="torchOn"
+        :toast="toast"
+        :cameraConstraints="cameraConstraints"
+        :activeFormats="activeFormats"
+        :paintTrack="paintTrack"
+        @toggle-torch="toggleTorch"
+        @camera-ready="onCameraReady"
+        @error="onError"
+      />
 
       <!-- Tap-to-add -->
       <div class="row" style="margin-top:8px">
@@ -89,187 +58,82 @@
         <button class="tab" :class="{active:mode==='builder'}" @click="setMode('builder')">ORDER BUILDER</button>
       </div>
 
-      <!-- QUICK LIST -->
-      <div v-if="mode==='quick'">
-        <table class="table">
-          <colgroup><col class="col-barcode" /><col class="col-qty" /></colgroup>
-          <thead><tr><th>Barcode</th><th class="right">QTY</th></tr></thead>
-          <tbody>
-            <tr v-for="([code, qty]) in quickEntries" :key="code">
-              <td class="barcode-col"><div class="barcode-text">{{ code }}</div></td>
-              <td class="qty-cell">
-                <div class="qty-pack">
-                  <div class="qty-wrap">
-                    <button class="icon-btn" @click="changeQty('quick', code, -1)">−</button>
-                    <span class="qty-num">{{ qty }}</span>
-                    <button class="icon-btn" @click="changeQty('quick', code, +1)">＋</button>
-                  </div>
-                  <button class="icon-btn" @click="removeItem('quick', code)" aria-label="Delete">✖</button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <div class="row" style="margin-top:10px">
-          <button class="btn ghost" @click="exportQuick('csv')">Export CSV</button>
-          <button class="btn ghost" @click="exportQuick('xlsx')">Export Excel</button>
-          <button class="btn ghost" @click="exportQuick('pdf')">Export PDF</button>
-          <button class="btn warn" style="margin-left:auto" @click="clearMode('quick')">Clear</button>
-        </div>
-      </div>
+      <!-- Mode Components -->
+      <QuickListMode
+        v-if="mode==='quick'"
+        :entries="quickEntries"
+        @change-qty="(code, delta) => changeQty('quick', code, delta)"
+        @remove-item="(code) => removeItem('quick', code)"
+        @export="(type) => exportQuick(type)"
+        @clear="clearMode('quick')"
+      />
 
-      <!-- VERIFY -->
-      <div v-if="mode==='verify'">
-        <div class="verify-summary top">
-          <span class="count">✅ {{ knownCount }}</span>
-          <span class="count">❌ {{ unknownCount }}</span>
-        </div>
+      <VerifyMode
+        v-if="mode==='verify'"
+        :verifyRows="verifyRows"
+        @remove-verify="removeVerify"
+        @export="(type) => exportVerify(type)"
+        @clear="clearMode('verify')"
+      />
 
-        <table class="table">
-          <colgroup><col class="col-barcode" /><col class="col-status" /><col class="col-del" /></colgroup>
-          <thead><tr><th>Barcode</th><th class="center">Status</th><th></th></tr></thead>
-          <tbody>
-            <tr v-for="r in verifyRows" :key="r.code">
-              <td class="barcode-col"><div class="barcode-text">{{ r.code }}</div></td>
-              <td class="center">
-                <span v-if="r.ok" class="status-emoji" aria-label="Known">✅</span>
-                <span v-else class="status-emoji" aria-label="Unknown">❌</span>
-              </td>
-              <td class="right"><button class="icon-btn" @click="removeVerify(r.code)" aria-label="Delete">✖</button></td>
-            </tr>
-          </tbody>
-        </table>
-
-        <div class="row" style="margin-top:10px">
-          <button class="btn ghost" @click="exportVerify('csv')">Export CSV</button>
-          <button class="btn ghost" @click="exportVerify('xlsx')">Export Excel</button>
-          <button class="btn ghost" @click="exportVerify('pdf')">Export PDF</button>
-          <button class="btn warn" style="margin-left:auto" @click="clearMode('verify')">Clear</button>
-        </div>
-      </div>
-
-      <!-- ORDER BUILDER (editable description under barcode) -->
-      <div v-if="mode==='builder'">
-        <table class="table table-builder">
-          <colgroup><col class="col-barcode" /><col class="col-qty" /></colgroup>
-          <thead><tr><th>Barcode / Description</th><th class="right">QTY</th></tr></thead>
-          <tbody>
-            <tr v-for="row in builderRows" :key="row.code">
-              <td class="barcode-col">
-                <div class="barcode-text" style="font-weight:700">{{ row.code }}</div>
-                <input
-                  class="input desc-input"
-                  :value="row.desc"
-                  @input="setBuilderDesc(row.code, ($event.target as HTMLInputElement).value)"
-                  @focus="editingCode = row.code"
-                  @blur="onDescBlur(row.code, ($event.target as HTMLInputElement).value)"
-                  placeholder="Unknown"
-                />
-              </td>
-              <td class="qty-cell">
-                <div class="qty-pack">
-                  <div class="qty-wrap">
-                    <button class="icon-btn" @click="changeQty('builder', row.code, -1)">−</button>
-                    <span class="qty-num">{{ row.qty }}</span>
-                    <button class="icon-btn" @click="changeQty('builder', row.code, +1)">＋</button>
-                  </div>
-                  <button class="icon-btn" @click="removeItem('builder', row.code)" aria-label="Delete">✖</button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <div class="row" style="margin-top:10px">
-          <button class="btn ghost" @click="exportBuilder('csv')">Export CSV</button>
-          <button class="btn ghost" @click="exportBuilder('xlsx')">Export Excel</button>
-          <button class="btn ghost" @click="exportBuilder('pdf')">Export PDF</button>
-          <button class="btn warn" style="margin-left:auto" @click="clearMode('builder')">Clear</button>
-        </div>
-      </div>
+      <BuilderMode
+        v-if="mode==='builder'"
+        :builderRows="builderRows"
+        @set-desc="setBuilderDesc"
+        @focus-desc="editingCode = $event"
+        @blur-desc="onDescBlur"
+        @change-qty="(code, delta) => changeQty('builder', code, delta)"
+        @remove-item="(code) => removeItem('builder', code)"
+        @export="(type) => exportBuilder(type)"
+        @clear="clearMode('builder')"
+      />
     </div>
 
-    <!-- CATALOG -->
-    <div v-else-if="tab==='catalog'" class="panel">
-      <h3 style="margin-top:2px">Import Catalog</h3>
-      <div class="row">
-        <input class="input" type="file" accept=".csv,.xls,.xlsx" @change="onFile" />
-        <input class="input" v-model="searchBarcode" placeholder="Search barcode..." />
-        <input class="input" v-model="search" placeholder="Search description or barcode..." />
-        <div class="kbd">{{ catalog.size }} items</div>
-        <button class="btn warn" style="margin-left:auto" @click="clearCatalog">Clear Catalog</button>
-      </div>
+    <!-- CATALOG TAB -->
+    <CatalogTab
+      v-else-if="tab==='catalog'"
+      :catalogSize="catalog.size"
+      :columns="columns"
+      :barcodeCol="barcodeCol"
+      :descCol="descCol"
+      :search="search"
+      :searchBarcode="searchBarcode"
+      :importStats="importStats"
+      :filteredCatalog="filteredCatalog"
+      @file-change="onFile"
+      @update:barcodeCol="barcodeCol = $event"
+      @update:descCol="descCol = $event"
+      @update:search="search = $event"
+      @update:searchBarcode="searchBarcode = $event"
+      @clear-catalog="clearCatalog"
+    />
 
-      <div v-if="columns.length" class="row" style="margin-top:10px">
-        <div>Barcode column:</div>
-        <select class="input" v-model="barcodeCol">
-          <option v-for="c in columns" :key="c" :value="c">{{ c }}</option>
-        </select>
-        <div>Description column:</div>
-        <select class="input" v-model="descCol">
-          <option value="">(none)</option>
-          <option v-for="c in columns" :key="c" :value="c">{{ c }}</option>
-        </select>
-      </div>
-
-      <div class="mini" v-if="importStats.total">
-        <span class="kbd">Rows: {{ importStats.total }}</span>
-        <span class="kbd">Inserted: {{ importStats.inserted }}</span>
-        <span class="kbd">Blank barcodes: {{ importStats.blank }}</span>
-        <span class="kbd">Duplicates collapsed: {{ importStats.duplicates }}</span>
-      </div>
-
-      <table class="table catalog">
-        <colgroup><col class="col-barcode" /><col /></colgroup>
-        <thead><tr><th class="barcode">Barcode</th><th class="desc">Description</th></tr></thead>
-        <tbody>
-          <tr v-for="row in filteredCatalog" :key="row.barcode">
-            <td class="barcode"><div class="barcode-text">{{ row.barcode }}</div></td>
-            <td class="desc"><div class="cell">{{ row.description }}</div></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- SETUP -->
-    <div v-else class="panel">
-      <h3>Checks & Trims</h3>
-      <div class="row" style="margin-bottom:10px">
-        <label><input type="checkbox" v-model="validateCD" /> Validate EAN/UPC check digit</label>
-        <label><input type="checkbox" v-model="stripCD" /> Strip EAN/UPC check digit</label>
-        <label><input type="checkbox" v-model="beep" /> Beep on success</label>
-      </div>
-
-      <h3>Scanner Formats</h3>
-      <div class="row nowrap" style="margin-bottom:6px">
-        <button class="btn ghost" @click="enableAll">Enable all</button>
-        <button class="btn ghost" @click="disableAll">Disable all</button>
-      </div>
-      <div class="row nowrap" style="margin-bottom:8px">
-        <label class="kbd no-wrap"><input type="checkbox" :checked="linearOn" @change="toggleLinear($event)" /> linear_codes</label>
-        <label class="kbd no-wrap"><input type="checkbox" :checked="matrixOn" @change="toggleMatrix($event)" /> matrix_codes</label>
-      </div>
-
-      <div class="row nowrap" style="margin-bottom:8px">
-        <button class="btn warn" @click="clearAllTrims">Clear all trims</button>
-      </div>
-
-      <table class="table setup">
-        <thead><tr><th>Format</th><th>Trim Prefix</th><th>Trim Suffix</th><th class="center">Enabled</th></tr></thead>
-        <tbody>
-          <tr v-for="f in formatList" :key="f">
-            <td class="ellipsis">{{ f }}</td>
-            <td><input class="input input-compact" type="number" min="0" v-model.number="trims[f].prefix" /></td>
-            <td><input class="input input-compact" type="number" min="0" v-model.number="trims[f].suffix" /></td>
-            <td class="center"><input type="checkbox" v-model="enabled[f]" /></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <!-- SETUP TAB -->
+    <SetupTab
+      v-else
+      :validateCD="validateCD"
+      :stripCD="stripCD"
+      :beep="beep"
+      :linearOn="linearOn"
+      :matrixOn="matrixOn"
+      :formatList="formatList"
+      :trims="trims"
+      :enabled="enabled"
+      @update:validateCD="validateCD = $event"
+      @update:stripCD="stripCD = $event"
+      @update:beep="beep = $event"
+      @toggle-linear="toggleLinear"
+      @toggle-matrix="toggleMatrix"
+      @enable-all="enableAll"
+      @disable-all="disableAll"
+      @clear-all-trims="clearAllTrims"
+      @update-trim="(format, field, value) => { trims[format][field] = value }"
+      @update-enabled="(format, value) => { enabled[format] = value }"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { QrcodeStream } from 'vue-qrcode-reader'
 import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
@@ -278,6 +142,17 @@ import {
   ALL_FORMATS, DEFAULT_TRIMS, LINEAR_GROUP, MATRIX_GROUP,
   type Format, type TrimRules, stripCheckDigit, validateCheckDigit, applyTrims
 } from './utils/barcode'
+
+// Import components
+import AppHeader from './components/AppHeader.vue'
+import TabNavigation from './components/TabNavigation.vue'
+import ScannerControls from './components/ScannerControls.vue'
+import CameraView from './components/CameraView.vue'
+import QuickListMode from './components/QuickListMode.vue'
+import VerifyMode from './components/VerifyMode.vue'
+import BuilderMode from './components/BuilderMode.vue'
+import CatalogTab from './components/CatalogTab.vue'
+import SetupTab from './components/SetupTab.vue'
 
 /* LocalStorage keys */
 const LS = {
@@ -305,7 +180,7 @@ function setMode(m: typeof mode.value){ mode.value = m }
 const scanning = ref(false)
 const devices = ref<MediaDeviceInfo[]>([])
 const selectedDeviceId = ref<string|undefined>(undefined)
-const videoBox = ref<HTMLElement | null>(null)
+const cameraViewRef = ref<InstanceType<typeof CameraView> | null>(null)
 const videoTrack = ref<MediaStreamTrack | null>(null)
 const torchSupported = ref(false)
 const torchOn = ref(false)
@@ -324,7 +199,7 @@ async function onCameraReady(){
   }catch{}
   await nextTick()
   try{
-    const vid = videoBox.value?.querySelector('video') as HTMLVideoElement | null
+    const vid = cameraViewRef.value?.videoBox?.querySelector('video') as HTMLVideoElement | null
     const track = (vid?.srcObject as MediaStream | undefined)?.getVideoTracks?.()[0] || null
     videoTrack.value = track || null
     torchSupported.value = !!(track && typeof track.getCapabilities === 'function' && (track.getCapabilities as any)().torch !== undefined)
@@ -417,7 +292,7 @@ function rebuildCatalogFromSelections(){
     catalog.set(code, desc)
   }
   importStats.inserted = catalog.size
-  syncBuilderDescriptionsFromCatalog() // keep user's edits; only fill empty/Unknown
+  syncBuilderDescriptionsFromCatalog()
 }
 watch([barcodeCol, descCol], rebuildCatalogFromSelections)
 
@@ -584,13 +459,8 @@ function paintTrack(codes: Detected[], ctx: CanvasRenderingContext2D) {
 }
 
 /* Commit + exports + controls */
-const knownCount = computed(() => verifyRows.filter(r=>r.ok).length)
-const unknownCount = computed(() => verifyRows.filter(r=>!r.ok).length)
-
-// Track which row is actively being edited to suppress fallback while typing
 const editingCode = ref<string | null>(null)
 
-// Show exact stored text while editing; otherwise show stored or catalog suggestion.
 const builderRows = computed(() =>
   [...builder.entries()].map(([code, v]) => {
     const stored = (v.desc && !/^unknown$/i.test(v.desc.trim())) ? v.desc : ''
@@ -640,10 +510,7 @@ function processManualCode() {
   const raw = manualCode.value.trim()
   if (!raw) return
   
-  // Apply the same processing as scanned codes
   let code = raw
-  
-  // Try to detect format based on code pattern (basic detection for EAN/UPC)
   let detectedFormat: Format | undefined = undefined
   if (/^\d{13}$/.test(raw)) {
     detectedFormat = 'ean_13'
@@ -656,24 +523,16 @@ function processManualCode() {
   }
   
   if (detectedFormat) {
-    // Validate check digit if enabled
     if (validateCD.value && !validateCheckDigit(code, detectedFormat)) {
       showToast(`❌ Invalid check digit for ${code}`)
       return
     }
-    
-    // Apply trims
     code = applyTrims(code, detectedFormat, trims)
-    
-    // Strip check digit if enabled
     code = stripCheckDigit(code, detectedFormat, stripCD.value)
   }
   
-  // Commit the processed code
   commitCode(code)
   showToast(`✔ Added ${code}`)
-  
-  // Clear the input
   manualCode.value = ''
 }
 
@@ -750,95 +609,32 @@ function playBeep(){ const Ctx = (window.AudioContext || (window as any).webkitA
 .light{ --overlayBg: rgba(255,255,255,.8); --overlayFg: #000; --fg: #111; --edge: rgba(0,0,0,.14); }
 @media (max-width:420px){ :root{ --qtyCol: 220px; --statusCol: 84px; } }
 
-/* Header */
-.header{ height: var(--headerH); display:flex; align-items:center; border-bottom: 1px solid var(--edge); }
-.header-content{ position:relative; display:flex; align-items:center; justify-content:space-between; width:100%; }
-.logo{ display:flex; align-items:center; gap:.5rem; }
-.logo-icon{ height: var(--logoH); max-height: calc(var(--headerH) - 24px); object-fit: contain; }
-.logo-center{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
-.logo-text{ height: calc(var(--logoH) * 1.3); max-height: calc(var(--headerH) - 20px); object-fit: contain; }
-
-/* Camera */
-.video{ position: relative; }
-:deep(canvas){ position:absolute; inset:0; z-index:3; }
-:deep(video){ position:relative; z-index:1; }
-
-/* Tables */
-.table{ width:100%; border-collapse:collapse; table-layout:fixed; }
-.table th,.table td{ padding:8px 10px; vertical-align:middle; }
-
-.table col.col-barcode{ width:auto; }
-.table col.col-qty{ width:var(--qtyCol); }
-.table col.col-status{ width:var(--statusCol); }
-.table col.col-del{ width:var(--delCol); }
-
-.barcode-col{ width:auto; }
-.barcode-text{
-  display:inline-block;
-  min-width:20ch;
-  max-width:100%;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-  font-variant-numeric: tabular-nums;
+.panel{
+  background:var(--panel);border:1px solid var(--muted);border-radius:var(--radius);
+  padding:14px;box-shadow:var(--shadow);overflow-x:hidden
 }
-.desc-input{
-  width:100%;
-  margin-top:4px;
-  font-size:.95rem;
-  padding:8px 10px;
-  border-radius:10px;
-}
-.ellipsis{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.row > *{min-width:0}
 
-.right{ text-align:right; }
-.center{ text-align:center; }
-
-/* VERIFY */
-.status-emoji{ font-size:1.1rem; }
-.verify-summary{ display:flex; gap:10px; margin:6px 0; }
-.verify-summary.top{ margin-top:8px; }
-.verify-summary .count { color: var(--fg); font-weight: 700; }
-
-/* QTY column */
-td.qty-cell{ padding-right:6px; }
-.qty-pack{ display:flex; justify-content:flex-end; align-items:center; gap:10px; }
-.qty-wrap{ display:inline-flex; align-items:center; gap:6px; }
-.qty-num{ min-width:26px; text-align:center; }
-
-/* Toast */
-.toast{
-  position:absolute;
-  left:50%; bottom:10px; transform:translateX(-50%);
-  background: var(--brand);
-  color:#fff;
-  padding:6px 10px;
-  border-radius:999px;
-  font-weight:600;
-  box-shadow:0 4px 12px rgba(0,0,0,.25);
-  z-index:5;
+.btn{
+  border:1px solid var(--muted);background:var(--brand);color:#fff;
+  padding:10px 14px;border-radius:12px;cursor:pointer
 }
 
-/* Order Builder: allow wrap + stacked description under barcode */
-.table.table-builder th,
-.table.table-builder td{
-  white-space: normal !important;
-  overflow: visible !important;
-  text-overflow: clip !important;
-  vertical-align: top;
+.mini{display:flex;align-items:center;gap:8px;margin:8px 0}
+.kbd{border:1px solid var(--muted);border-radius:6px;padding:4px 6px;background:var(--panel2);color:var(--text)}
+.icon-btn{
+  display:inline-grid;place-items:center;width:36px;height:36px;border-radius:10px;
+  border:1px solid var(--muted);background:var(--panel2);cursor:pointer;color:var(--text)
 }
 
-.table.table-builder .barcode-text{
-  display:block; /* barcode on its own line */
-  white-space: normal !important;
-  overflow: visible !important;
-  text-overflow: clip !important;
-  word-break: break-word; /* very long codes */
+.chips{display:flex;gap:8px;flex-wrap:nowrap;width:100%}
+.chips .tab{flex:1 1 0}
+.tab{
+  flex:1 1 0;padding:12px 16px;border-radius:12px;
+  border:1px solid var(--pill-border);
+  background:var(--panel2);cursor:pointer;text-align:center;color:var(--text)
 }
-
-.table.table-builder .desc-input{
-  display:block; /* force below barcode */
-  width:100%;
-  margin-top:4px;
-}
+.tab.active{outline:2px solid var(--brand);background:transparent}
+:root.light .tab.active{ border-color: var(--brand); }
 </style>
