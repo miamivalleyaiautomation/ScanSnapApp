@@ -1,6 +1,32 @@
 <!-- src/components/SetupTab.vue -->
 <template>
   <div class="panel">
+    <h3>Scanner Input Mode</h3>
+    <div class="row" style="margin-bottom:15px">
+      <label class="radio-option">
+        <input 
+          type="radio" 
+          name="scannerMode" 
+          value="camera" 
+          :checked="scannerMode === 'camera'"
+          @change="$emit('update:scannerMode', 'camera')"
+        />
+        <span class="radio-label">📷 Built-in Camera</span>
+        <span class="radio-desc">Use device camera for scanning</span>
+      </label>
+      <label class="radio-option">
+        <input 
+          type="radio" 
+          name="scannerMode" 
+          value="external" 
+          :checked="scannerMode === 'external'"
+          @change="$emit('update:scannerMode', 'external')"
+        />
+        <span class="radio-label">🔌 External Scanner</span>
+        <span class="radio-desc">USB/Bluetooth barcode reader</span>
+      </label>
+    </div>
+
     <h3>Checks & Trims</h3>
     <div class="row" style="margin-bottom:10px">
       <label><input type="checkbox" :checked="validateCD" @change="$emit('update:validateCD', $event.target.checked)" /> Validate EAN/UPC check digit</label>
@@ -40,6 +66,7 @@
 import type { Format, TrimRules } from '../utils/barcode'
 
 const props = defineProps<{
+  scannerMode: 'camera' | 'external'
   validateCD: boolean
   stripCD: boolean
   beep: boolean
@@ -51,6 +78,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
+  'update:scannerMode': [value: 'camera' | 'external']
   'update:validateCD': [value: boolean]
   'update:stripCD': [value: boolean]
   'update:beep': [value: boolean]
@@ -125,5 +153,59 @@ function updateEnabled(format: Format, event: Event) {
   .table.setup th:nth-child(2), .table.setup td:nth-child(2){width:22%}
   .table.setup th:nth-child(3), .table.setup td:nth-child(3){width:22%}
   .table.setup th:nth-child(4), .table.setup td:nth-child(4){width:18%}
+}
+
+/* Radio option styles */
+.radio-option {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--muted);
+  border-radius: 10px;
+  background: var(--panel2);
+  cursor: pointer;
+  transition: all 0.2s;
+  flex: 1;
+  position: relative;
+}
+
+.radio-option:hover {
+  border-color: var(--brand);
+}
+
+.radio-option input[type="radio"] {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.radio-label {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 28px;
+}
+
+.radio-desc {
+  font-size: 0.875rem;
+  color: var(--muted);
+  margin-left: 28px;
+}
+
+.radio-option input[type="radio"]:checked ~ .radio-label {
+  color: var(--brand);
+  font-weight: 600;
+}
+
+.radio-option input[type="radio"]:checked ~ .radio-desc {
+  color: var(--text);
+}
+
+.radio-option input[type="radio"]:checked {
+  accent-color: var(--brand);
 }
 </style>
