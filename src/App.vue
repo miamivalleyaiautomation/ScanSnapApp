@@ -1,4 +1,4 @@
-<!-- FILE: src/App.vue -->
+<!-- src/App.vue -->
 <template>
   <main class="app">
     <header class="top">
@@ -9,6 +9,12 @@
       </nav>
     </header>
 
+    <!-- Add Manual Entry Component here - always visible -->
+    <ManualBarcodeEntry 
+      :mode="tab"
+      @barcode-scanned="handleManualScan"
+    />
+
     <section v-if="tab==='verify'">
       <VerifyTab ref="verifyRef" />
     </section>
@@ -16,7 +22,7 @@
     <section v-else class="scanner">
       <p>This is your existing scanner area. When a code is read, call:</p>
       <code>verifyRef?.handleScan(decodedValue, qty?)</code>
-      <!-- Example manual hook: -->
+      <!-- Example manual hook (can be removed since we have the global one now): -->
       <div class="sim">
         <input v-model="manual" placeholder="barcode" @keyup.enter="pushManual" />
         <input type="number" v-model.number="manualQty" min="1" style="width:80px" />
@@ -29,14 +35,25 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import VerifyTab from './components/VerifyTab.vue';
+import ManualBarcodeEntry from './components/ManualBarcodeEntry.vue';
 
 const tab = ref<'verify'|'scanner'>('verify');
 const verifyRef = ref<InstanceType<typeof VerifyTab> | null>(null);
-const manual = ref(''); const manualQty = ref(1);
+const manual = ref(''); 
+const manualQty = ref(1);
+
+// Handle scans from the global manual entry component
+function handleManualScan(barcode: string, qty: number) {
+  // For now, always send to verify tab
+  // Later you can route based on tab value
+  verifyRef.value?.handleScan(barcode, qty);
+}
+
 function pushManual() {
   if (!manual.value) return;
   verifyRef.value?.handleScan(manual.value, Math.max(1, manualQty.value || 1));
-  manual.value=''; manualQty.value=1;
+  manual.value=''; 
+  manualQty.value=1;
 }
 </script>
 
