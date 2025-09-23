@@ -1,31 +1,28 @@
 {
-  "name": "scansnap",
-  "version": "0.1.0",
+  "name": "scansnap-app",
+  "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview"
   },
   "dependencies": {
-    "@clerk/nextjs": "^5.3.0",
     "@supabase/supabase-js": "^2.45.1",
-    "next": "14.2.5",
+    "jspdf": "^2.5.1",
+    "jspdf-autotable": "^3.8.1",
     "papaparse": "^5.4.1",
-    "react": "^18",
-    "react-dom": "^18",
-    "svix": "^1.24.0",
+    "vue": "^3.4.21",
+    "vue-qrcode-reader": "^5.5.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@types/node": "^20",
+    "@types/node": "^20.11.30",
     "@types/papaparse": "^5.3.14",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
-    "eslint": "^8",
-    "eslint-config-next": "14.2.5",
-    "typescript": "^5",
-    "vite": "^5.4.9"
+    "@vitejs/plugin-vue": "^5.0.4",
+    "typescript": "^5.4.2",
+    "vite": "^5.2.6",
+    "vue-tsc": "^2.0.7"
   }
 }

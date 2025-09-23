@@ -1,4 +1,4 @@
-# /src/stores/verifyStore.ts
+// src/stores/verifyStore.ts
 import { reactive, computed } from 'vue';
 import type { VerifyCatalogRow, OrderRow, VerifyRow, Status } from '@/types/catalog';
 import { exportVerifyCSV, exportVerifyPDF } from '@/utils/exporters';
