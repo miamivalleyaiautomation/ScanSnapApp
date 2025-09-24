@@ -25,7 +25,6 @@ export function useSession() {
         'https://scansnap.io/api/app/session/validate',
         'https://scansnap.io/api/session/validate',
         'https://scansnap.io/dashboard/test-session', // Your test endpoint
-        `https://scansnap.io/api/session/${sessionToken}`, // Direct session lookup
       ]
       
       let lastError: any = null
@@ -74,53 +73,77 @@ export function useSession() {
         }
       }
       
-      // If all endpoints fail, use the hardcoded fallback
-      console.warn('🔌 All API endpoints unreachable, using fallback session for development')
+      // If all endpoints fail, try to decode the token
+      console.warn('🔌 All API endpoints unreachable, attempting to decode token')
       
-      // Use your actual Plus session data as fallback
-      const fallbackSession: UserSession = {
-        userId: "user_3325Ot2neC1W6guxHX5jpIvXEaC",
-        email: "tirth.m.soni2018@gmail.com",
-        firstName: "Tirth",
-        lastName: "Soni",
-        subscription: "plus",
-        dashboardUrl: "https://scansnap.io/dashboard",
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+      try {
+        // Try to decode the session token if it's a JWT or base64 encoded
+        let sessionData: any = null
+        
+        // Check if it's a JWT (has three parts separated by dots)
+        if (sessionToken.includes('.')) {
+          const parts = sessionToken.split('.')
+          if (parts.length >= 2) {
+            // Decode the payload (second part)
+            const decoded = atob(parts[1])
+            sessionData = JSON.parse(decoded)
+          }
+        } else {
+          // Try direct base64 decode
+          try {
+            const decoded = atob(sessionToken)
+            sessionData = JSON.parse(decoded)
+          } catch {
+            // Not base64 encoded
+          }
+        }
+        
+        // If we successfully decoded something with user info
+        if (sessionData && sessionData.email) {
+          const decodedSession: UserSession = {
+            userId: sessionData.userId || sessionData.sub || `user_${Date.now()}`,
+            email: sessionData.email,
+            firstName: sessionData.firstName || sessionData.given_name || '',
+            lastName: sessionData.lastName || sessionData.family_name || '',
+            subscription: sessionData.subscription || sessionData.plan || 'basic',
+            dashboardUrl: sessionData.dashboardUrl || 'https://scansnap.io/dashboard',
+            expiresAt: sessionData.expiresAt || sessionData.exp 
+              ? new Date((sessionData.exp || sessionData.expiresAt) * 1000).toISOString()
+              : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+          }
+          
+          console.log('✅ Using decoded session for:', decodedSession.email)
+          session.value = decodedSession
+          error.value = null
+          
+          // Store the decoded session
+          localStorage.setItem('scansnap_session', JSON.stringify(decodedSession))
+          localStorage.setItem('scansnap_session_token', sessionToken)
+          localStorage.setItem('scansnap_session_timestamp', new Date().toISOString())
+          
+          return decodedSession
+        }
+      } catch (decodeError) {
+        console.error('Failed to decode session token:', decodeError)
       }
       
-      console.log('✅ Using fallback Plus session for:', fallbackSession.email)
-      session.value = fallbackSession
-      error.value = null // Clear any error
+      // If we can't decode the token or reach the API, return minimal session
+      // This allows the app to work but with limited features
+      console.warn('⚠️ Could not validate or decode session, using standalone mode')
+      error.value = 'Unable to validate session. Running with limited features.'
       
-      // Store the fallback session
-      localStorage.setItem('scansnap_session', JSON.stringify(fallbackSession))
-      localStorage.setItem('scansnap_session_token', sessionToken)
-      localStorage.setItem('scansnap_session_timestamp', new Date().toISOString())
-      
-      return fallbackSession
+      // Don't set a fake session - let the app run in standalone mode
+      clearSession()
+      throw new Error('Session validation failed')
       
     } catch (err) {
-      console.error('❌ Unexpected error in session validation:', err)
+      console.error('❌ Session validation error:', err)
       
-      // Even on unexpected errors, use the fallback for development
-      const fallbackSession: UserSession = {
-        userId: "user_3325Ot2neC1W6guxHX5jpIvXEaC",
-        email: "tirth.m.soni2018@gmail.com",
-        firstName: "Tirth",
-        lastName: "Soni",
-        subscription: "plus",
-        dashboardUrl: "https://scansnap.io/dashboard",
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-      }
+      // Clear the session and show error
+      clearSession()
+      error.value = 'Unable to validate session. Please return to the dashboard and try again.'
       
-      session.value = fallbackSession
-      error.value = null
-      
-      localStorage.setItem('scansnap_session', JSON.stringify(fallbackSession))
-      localStorage.setItem('scansnap_session_token', sessionToken)
-      localStorage.setItem('scansnap_session_timestamp', new Date().toISOString())
-      
-      return fallbackSession
+      throw err
     }
   }
   
@@ -135,6 +158,14 @@ export function useSession() {
       
       if (sessionToken) {
         console.log('📍 Found session in URL')
+        
+        // IMPORTANT: Clear any existing session when new token arrives
+        // This ensures we don't show the wrong user
+        const existingToken = localStorage.getItem('scansnap_session_token')
+        if (existingToken && existingToken !== sessionToken) {
+          console.log('🔄 Different session token detected, clearing old session')
+          clearSession()
+        }
         
         try {
           await validateSession(sessionToken)
@@ -266,6 +297,13 @@ export function useSession() {
     return session.value !== null && session.value.subscription !== 'basic'
   }
   
+  // Force refresh session (useful when switching users)
+  const refreshSession = async () => {
+    console.log('🔄 Force refreshing session...')
+    clearSession() // Clear everything first
+    await checkSession() // Re-check from URL or storage
+  }
+  
   // Initialize session check on mount
   onMounted(() => {
     checkSession()
@@ -280,6 +318,7 @@ export function useSession() {
     hasFeature,
     checkSession,
     getSubscriptionLabel,
-    isSubscribed
+    isSubscribed,
+    refreshSession
   }
 }
