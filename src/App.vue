@@ -15,7 +15,9 @@
       font-size: 0.875rem;
     ">
       <div style="display: flex; align-items: center; gap: 12px;">
-        <span style="color: var(--text-dim)">{{ session.email }}</span>
+        <span style="color: var(--text-dim)">
+          {{ session.firstName && session.lastName ? `${session.firstName} ${session.lastName}` : session.email }}
+        </span>
         <span :style="`
           background: ${session.subscription === 'plus' ? '#10b981' : 
                        session.subscription === 'pro' ? '#3b82f6' : 
@@ -27,7 +29,7 @@
           font-weight: 600;
           text-transform: uppercase;
         `">
-          {{ session.subscription }}
+          {{ session.subscription === 'pro_dpms' ? 'PRO+DPMS' : session.subscription.toUpperCase() }}
         </span>
       </div>
       <a 
@@ -36,6 +38,30 @@
       >
         ← Back to Dashboard
       </a>
+    </div>
+    
+    <!-- Loading State -->
+    <div v-if="isLoading && !session" style="
+      padding: 20px;
+      text-align: center;
+      color: var(--text-dim);
+    ">
+      Loading session...
+    </div>
+    
+    <!-- Error State -->
+    <div v-if="error && !session" style="
+      padding: 16px;
+      background: var(--panel2);
+      border: 1px solid var(--bad);
+      border-radius: 8px;
+      margin: 10px 0;
+      color: var(--bad);
+    ">
+      <strong>Session Error:</strong> {{ error }}
+      <div style="margin-top: 8px; font-size: 0.875rem;">
+        Please return to the <a href="https://scansnap.io/dashboard" style="color: var(--brand)">dashboard</a> and try again.
+      </div>
     </div>
 
     <!-- Tabs -->
@@ -123,7 +149,7 @@
             <button 
               class="tab" 
               :class="{active:mode==='verify', disabled: !hasFeature('verify')}" 
-              @click="hasFeature('verify') ? setMode('verify') : null"
+              @click="hasFeature('verify') ? setMode('verify') : showSubscriptionAlert('verify')"
               :title="!hasFeature('verify') ? 'Requires Plus subscription or higher' : ''"
             >
               CATALOG VERIFY
@@ -132,7 +158,7 @@
             <button 
               class="tab" 
               :class="{active:mode==='builder', disabled: !hasFeature('builder')}" 
-              @click="hasFeature('builder') ? setMode('builder') : null"
+              @click="hasFeature('builder') ? setMode('builder') : showSubscriptionAlert('builder')"
               :title="!hasFeature('builder') ? 'Requires Plus subscription or higher' : ''"
             >
               ORDER BUILDER
@@ -186,6 +212,7 @@
       :searchBarcode="searchBarcode"
       :importStats="importStats"
       :filteredCatalog="filteredCatalog"
+      :hasImportFeature="hasFeature('catalog_import')"
       @file-change="onFile"
       @update:barcodeCol="barcodeCol = $event"
       @update:descCol="descCol = $event"
@@ -243,18 +270,9 @@ import BuilderMode from './components/BuilderMode.vue'
 import CatalogTab from './components/CatalogTab.vue'
 import SetupTab from './components/SetupTab.vue'
 
-// Session management - mock implementation for now
-// TODO: Uncomment when useSession composable is ready
-// import { useSession } from './composables/useSession'
-// const { session, hasFeature } = useSession()
-
-// Mock session for now - replace with actual implementation
-const session = ref<{email: string, subscription: string, dashboardUrl: string} | null>(null)
-const hasFeature = (feature: string): boolean => {
-  // For now, allow all features
-  // TODO: Implement actual feature checking based on subscription
-  return true
-}
+// Session management
+import { useSession } from './composables/useSession'
+const { session, hasFeature, isLoading, error } = useSession()
 
 // LocalStorage keys
 const LS = {
@@ -297,6 +315,15 @@ watch(scannerMode, v => localStorage.setItem(LS.scannerMode, v))
 
 function setMode(m: typeof mode.value) { 
   mode.value = m 
+}
+
+function showSubscriptionAlert(feature: string) {
+  const featureNames: Record<string, string> = {
+    'verify': 'Catalog Verify',
+    'builder': 'Order Builder'
+  }
+  const featureName = featureNames[feature] || feature
+  showToast(`🔒 ${featureName} requires Plus subscription or higher`, 2000)
 }
 
 /* Camera & devices */
@@ -502,6 +529,13 @@ async function onFile(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
   if (!file) return
   
+  // Check if user has catalog import feature
+  if (!hasFeature('catalog_import')) {
+    showToast('🔒 Catalog import requires Plus subscription or higher', 2000)
+    ;(e.target as HTMLInputElement).value = '' // Clear the file input
+    return
+  }
+  
   const ext = file.name.split('.').pop()?.toLowerCase()
   let rows: Record<string, unknown>[] = []
   
@@ -608,6 +642,15 @@ onMounted(() => {
   
   syncBuilderDescriptionsFromCatalog()
   startGuard()
+  
+  // Check if current mode is accessible, otherwise switch to 'quick'
+  setTimeout(() => {
+    if ((mode.value === 'verify' && !hasFeature('verify')) || 
+        (mode.value === 'builder' && !hasFeature('builder'))) {
+      mode.value = 'quick'
+      console.log('Switched to Quick List mode due to subscription limitations')
+    }
+  }, 1000) // Small delay to allow session to load
 })
 
 onBeforeUnmount(stopGuard)
@@ -920,6 +963,12 @@ function clearMode(which: 'quick' | 'verify' | 'builder') {
 
 /* Exports */
 function exportQuick(type: 'csv' | 'xlsx' | 'pdf') {
+  // Check subscription for XLSX and PDF exports
+  if ((type === 'xlsx' || type === 'pdf') && !hasFeature('export_' + type)) {
+    showToast(`🔒 ${type.toUpperCase()} export requires Plus subscription or higher`, 2000)
+    return
+  }
+  
   const rows = [...quickList.entries()].map(([code, qty]) => [code, qty])
   if (type === 'csv') exportCSV('quick-list.csv', rows, ['Barcode', 'QTY'])
   if (type === 'xlsx') exportXLSX('quick-list.xlsx', rows, ['Barcode', 'QTY'])
@@ -927,6 +976,12 @@ function exportQuick(type: 'csv' | 'xlsx' | 'pdf') {
 }
 
 function exportVerify(type: 'csv' | 'xlsx' | 'pdf') {
+  // Check subscription for XLSX and PDF exports
+  if ((type === 'xlsx' || type === 'pdf') && !hasFeature('export_' + type)) {
+    showToast(`🔒 ${type.toUpperCase()} export requires Plus subscription or higher`, 2000)
+    return
+  }
+  
   const rows = verifyRows.map(r => [r.code, r.ok ? 'KNOWN' : 'UNKNOWN'])
   if (type === 'csv') exportCSV('catalog-verify.csv', rows, ['Barcode', 'Status'])
   if (type === 'xlsx') exportXLSX('catalog-verify.xlsx', rows, ['Barcode', 'Status'])
@@ -934,6 +989,12 @@ function exportVerify(type: 'csv' | 'xlsx' | 'pdf') {
 }
 
 function exportBuilder(type: 'csv' | 'xlsx' | 'pdf') {
+  // Check subscription for XLSX and PDF exports
+  if ((type === 'xlsx' || type === 'pdf') && !hasFeature('export_' + type)) {
+    showToast(`🔒 ${type.toUpperCase()} export requires Plus subscription or higher`, 2000)
+    return
+  }
+  
   const rows = builderRows.value.map(r => [r.code, (r.desc && r.desc.trim() !== '' ? r.desc : 'Unknown'), r.qty])
   if (type === 'csv') exportCSV('order-builder.csv', rows, ['Barcode', 'Description', 'QTY'])
   if (type === 'xlsx') exportXLSX('order-builder.xlsx', rows, ['Barcode', 'Description', 'QTY'])
