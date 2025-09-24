@@ -10,3 +10,17 @@
   for = "/*"
   [headers.values]
     Permissions-Policy = "camera=(self)"
+    
+[[headers]]
+  for = "/api/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "https://app.scansnap.io"
+    Access-Control-Allow-Methods = "GET, POST, OPTIONS"
+    Access-Control-Allow-Headers = "Content-Type, Accept"
+
+[[headers]]
+  for = "/dashboard/test-session"
+  [headers.values]
+    Access-Control-Allow-Origin = "https://app.scansnap.io"
+    Access-Control-Allow-Methods = "GET, POST, OPTIONS"
+    Access-Control-Allow-Headers = "Content-Type"
