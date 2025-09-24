@@ -3,7 +3,41 @@
   <div class="container">
     <!-- Header -->
     <AppHeader :isDark="isDark" @toggle-theme="toggleTheme" />
-
+    
+    <!-- ADD THE SESSION STATUS BAR RIGHT HERE, AFTER AppHeader -->
+    <!-- Session Status Bar -->
+    <div v-if="session" style="
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center; 
+      padding: 8px 16px; 
+      background: var(--panel2); 
+      border-bottom: 1px solid var(--muted);
+      font-size: 0.875rem;
+    ">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span style="color: var(--text-dim)">{{ session.email }}</span>
+        <span :style="`
+          background: ${session.subscription === 'plus' ? '#10b981' : 
+                       session.subscription === 'pro' ? '#3b82f6' : 
+                       session.subscription === 'pro_dpms' ? '#8b5cf6' : '#6b7280'}; 
+          color: white; 
+          padding: 2px 8px; 
+          border-radius: 4px; 
+          font-size: 0.75rem; 
+          font-weight: 600;
+          text-transform: uppercase;
+        `">
+          {{ session.subscription }}
+        </span>
+      </div>
+      <a 
+        :href="session.dashboardUrl" 
+        style="color: var(--brand); text-decoration: none;"
+      >
+        ← Back to Dashboard
+      </a>
+    </div>
     <!-- Tabs -->
     <TabNavigation v-model="tab" />
 
@@ -81,11 +115,29 @@
               <button class="icon-btn" @click="incLast">＋</button>
             </template>
           </div>
-          <div class="chips" style="margin-top:6px">
-            <button class="tab" :class="{active:mode==='quick'}" @click="setMode('quick')">QUICK LIST</button>
-            <button class="tab" :class="{active:mode==='verify'}" @click="setMode('verify')">CATALOG VERIFY</button>
-            <button class="tab" :class="{active:mode==='builder'}" @click="setMode('builder')">ORDER BUILDER</button>
-          </div>
+         <div class="chips" style="margin-top:6px">
+  <button class="tab" :class="{active:mode==='quick'}" @click="setMode('quick')">
+    QUICK LIST
+  </button>
+  <button 
+    class="tab" 
+    :class="{active:mode==='verify', disabled: !hasFeature('verify')}" 
+    @click="hasFeature('verify') ? setMode('verify') : null"
+    :title="!hasFeature('verify') ? 'Requires Plus subscription or higher' : ''"
+  >
+    CATALOG VERIFY
+    <span v-if="!hasFeature('verify')" style="font-size: 0.7rem; display: block;">🔒 Plus+</span>
+  </button>
+  <button 
+    class="tab" 
+    :class="{active:mode==='builder', disabled: !hasFeature('builder')}" 
+    @click="hasFeature('builder') ? setMode('builder') : null"
+    :title="!hasFeature('builder') ? 'Requires Plus subscription or higher' : ''"
+  >
+    ORDER BUILDER
+    <span v-if="!hasFeature('builder')" style="font-size: 0.7rem; display: block;">🔒 Plus+</span>
+  </button>
+</div>
 
           <!-- Mode Components -->
           <div class="mode-content">
@@ -169,6 +221,23 @@
 </template>
 
 <script setup lang="ts">
+import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import Papa from 'papaparse'
+import * as XLSX from 'xlsx'
+import { exportCSV, exportXLSX, exportPDF } from './utils/exporters'
+import {
+  ALL_FORMATS, DEFAULT_TRIMS, LINEAR_GROUP, MATRIX_GROUP,
+  type Format, type TrimRules, stripCheckDigit, validateCheckDigit, applyTrims
+} from './utils/barcode'
+
+// Import components
+import AppHeader from './components/AppHeader.vue'
+import TabNavigation from './components/TabNavigation.vue'
+// ... your other component imports ...
+
+// ADD THIS HERE - Session management
+import { useSession } from './composables/useSession'
+const { session, hasFeature } = useSession()
 import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'

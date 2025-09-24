@@ -251,3 +251,12 @@ body{
   -webkit-box-orient: initial !important;
   max-width: none !important;
 }
+.tab.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  position: relative;
+}
+
+.tab.disabled:hover {
+  background: var(--panel2);
+}
