@@ -5,7 +5,7 @@
     <AppHeader :isDark="isDark" @toggle-theme="toggleTheme" />
     
     <!-- Session Status Bar -->
-    <div v-if="session" style="
+    <div v-if="session && !error" style="
       display: flex; 
       justify-content: space-between; 
       align-items: center; 
@@ -40,28 +40,52 @@
       </a>
     </div>
     
-    <!-- Loading State -->
-    <div v-if="isLoading && !session" style="
-      padding: 20px;
+    <!-- Loading State (very brief) -->
+    <div v-if="isLoading && !session && !error" style="
+      padding: 12px 16px;
+      background: var(--panel2);
+      border-bottom: 1px solid var(--muted);
       text-align: center;
       color: var(--text-dim);
+      font-size: 0.875rem;
     ">
-      Loading session...
+      Checking session...
     </div>
     
-    <!-- Error State -->
-    <div v-if="error && !session" style="
-      padding: 16px;
+    <!-- Standalone Mode Info Bar (when no session from URL) -->
+    <div v-if="!session && !isLoading && !error && !hasSessionInUrl" style="
+      padding: 8px 16px;
       background: var(--panel2);
-      border: 1px solid var(--bad);
-      border-radius: 8px;
-      margin: 10px 0;
-      color: var(--bad);
+      border-bottom: 1px solid var(--muted);
+      font-size: 0.875rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     ">
-      <strong>Session Error:</strong> {{ error }}
-      <div style="margin-top: 8px; font-size: 0.875rem;">
-        Please return to the <a href="https://scansnap.io/dashboard" style="color: var(--brand)">dashboard</a> and try again.
-      </div>
+      <span style="color: var(--text-dim)">
+        Using ScanSnap in standalone mode • Limited features available
+      </span>
+      <a 
+        href="https://scansnap.io/dashboard" 
+        style="color: var(--brand); text-decoration: none;"
+      >
+        Sign in for full features →
+      </a>
+    </div>
+    
+    <!-- Error State (only if session was expected but failed) -->
+    <div v-if="error && hasSessionInUrl" style="
+      padding: 12px 16px;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid var(--bad);
+      border-bottom: 1px solid var(--bad);
+      color: var(--bad);
+      font-size: 0.875rem;
+    ">
+      <strong>Session Error:</strong> Unable to validate session. 
+      <a href="https://scansnap.io/dashboard" style="color: var(--brand); margin-left: 8px;">
+        Return to dashboard →
+      </a>
     </div>
 
     <!-- Tabs -->
@@ -273,6 +297,15 @@ import SetupTab from './components/SetupTab.vue'
 // Session management
 import { useSession } from './composables/useSession'
 const { session, hasFeature, isLoading, error } = useSession()
+
+// Check if session was expected from URL
+const hasSessionInUrl = ref(false)
+
+// Initialize hasSessionInUrl immediately
+if (typeof window !== 'undefined') {
+  const urlParams = new URLSearchParams(window.location.search)
+  hasSessionInUrl.value = urlParams.has('session')
+}
 
 // LocalStorage keys
 const LS = {
@@ -963,12 +996,6 @@ function clearMode(which: 'quick' | 'verify' | 'builder') {
 
 /* Exports */
 function exportQuick(type: 'csv' | 'xlsx' | 'pdf') {
-  // Check subscription for XLSX and PDF exports
-  if ((type === 'xlsx' || type === 'pdf') && !hasFeature('export_' + type)) {
-    showToast(`🔒 ${type.toUpperCase()} export requires Plus subscription or higher`, 2000)
-    return
-  }
-  
   const rows = [...quickList.entries()].map(([code, qty]) => [code, qty])
   if (type === 'csv') exportCSV('quick-list.csv', rows, ['Barcode', 'QTY'])
   if (type === 'xlsx') exportXLSX('quick-list.xlsx', rows, ['Barcode', 'QTY'])
@@ -976,12 +1003,6 @@ function exportQuick(type: 'csv' | 'xlsx' | 'pdf') {
 }
 
 function exportVerify(type: 'csv' | 'xlsx' | 'pdf') {
-  // Check subscription for XLSX and PDF exports
-  if ((type === 'xlsx' || type === 'pdf') && !hasFeature('export_' + type)) {
-    showToast(`🔒 ${type.toUpperCase()} export requires Plus subscription or higher`, 2000)
-    return
-  }
-  
   const rows = verifyRows.map(r => [r.code, r.ok ? 'KNOWN' : 'UNKNOWN'])
   if (type === 'csv') exportCSV('catalog-verify.csv', rows, ['Barcode', 'Status'])
   if (type === 'xlsx') exportXLSX('catalog-verify.xlsx', rows, ['Barcode', 'Status'])
@@ -989,12 +1010,6 @@ function exportVerify(type: 'csv' | 'xlsx' | 'pdf') {
 }
 
 function exportBuilder(type: 'csv' | 'xlsx' | 'pdf') {
-  // Check subscription for XLSX and PDF exports
-  if ((type === 'xlsx' || type === 'pdf') && !hasFeature('export_' + type)) {
-    showToast(`🔒 ${type.toUpperCase()} export requires Plus subscription or higher`, 2000)
-    return
-  }
-  
   const rows = builderRows.value.map(r => [r.code, (r.desc && r.desc.trim() !== '' ? r.desc : 'Unknown'), r.qty])
   if (type === 'csv') exportCSV('order-builder.csv', rows, ['Barcode', 'Description', 'QTY'])
   if (type === 'xlsx') exportXLSX('order-builder.xlsx', rows, ['Barcode', 'Description', 'QTY'])
