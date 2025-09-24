@@ -233,19 +233,27 @@ import {
 // Import components
 import AppHeader from './components/AppHeader.vue'
 import TabNavigation from './components/TabNavigation.vue'
-// ... your other component imports ...
+import ScannerControls from './components/ScannerControls.vue'
+import CameraView from './components/CameraView.vue'
+import ExternalScannerInput from './components/ExternalScannerInput.vue'
+import QuickListMode from './components/QuickListMode.vue'
+import VerifyMode from './components/VerifyMode.vue'
+import BuilderMode from './components/BuilderMode.vue'
+import CatalogTab from './components/CatalogTab.vue'
+import SetupTab from './components/SetupTab.vue'
 
-// ADD THIS HERE - Session management
-import { useSession } from './composables/useSession'
-const { session, hasFeature } = useSession()
-import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import Papa from 'papaparse'
-import * as XLSX from 'xlsx'
-import { exportCSV, exportXLSX, exportPDF } from './utils/exporters'
-import {
-  ALL_FORMATS, DEFAULT_TRIMS, LINEAR_GROUP, MATRIX_GROUP,
-  type Format, type TrimRules, stripCheckDigit, validateCheckDigit, applyTrims
-} from './utils/barcode'
+// Session management (commented out until file is created)
+// import { useSession } from './composables/useSession'
+// const { session, hasFeature } = useSession()
+
+// For now, create mock functions
+const session = ref(null)
+const hasFeature = (feature: string) => true // Allow all features for now
+
+// Rest of your existing code continues here...
+/* LocalStorage keys */
+const LS = {
+  tab:'ui.tab', mode:'ui.mode', scannerMode:'ui.scannerMode',
 
 // Import components
 import AppHeader from './components/AppHeader.vue'
