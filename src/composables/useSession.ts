@@ -20,128 +20,108 @@ export function useSession() {
     try {
       console.log('🔐 Validating session with token:', sessionToken.substring(0, 20) + '...')
       
-      // List of endpoints to try
-      const endpoints = [
-        'https://scansnap.io/api/app/session/validate',
-        'https://scansnap.io/api/session/validate',
-        'https://scansnap.io/dashboard/test-session', // Your test endpoint
-      ]
-      
-      let lastError: any = null
-      
-      // Try each endpoint
-      for (const endpoint of endpoints) {
-        try {
-          console.log(`Trying endpoint: ${endpoint}`)
-          
-          const controller = new AbortController()
-          const timeoutId = setTimeout(() => controller.abort(), 3000) // 3 second timeout per endpoint
-          
-          const response = await fetch(endpoint, {
-            method: endpoint.includes('test-session') ? 'GET' : 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-            },
-            body: endpoint.includes('test-session') ? undefined : JSON.stringify({ sessionToken }),
-            signal: controller.signal
-          })
-          
-          clearTimeout(timeoutId)
-          
-          if (response.ok) {
-            const data = await response.json()
-            console.log('API Response from', endpoint, ':', data)
-            
-            if (data.success && data.session) {
-              console.log('✅ Session validated:', data.session)
-              session.value = data.session
-              error.value = null
-              
-              // Store in localStorage for this session
-              localStorage.setItem('scansnap_session', JSON.stringify(data.session))
-              localStorage.setItem('scansnap_session_token', sessionToken)
-              localStorage.setItem('scansnap_session_timestamp', new Date().toISOString())
-              
-              return data.session
-            }
-          }
-        } catch (err) {
-          lastError = err
-          console.warn(`Failed to fetch from ${endpoint}:`, err)
-          continue // Try next endpoint
-        }
-      }
-      
-      // If all endpoints fail, try to decode the token
-      console.warn('🔌 All API endpoints unreachable, attempting to decode token')
+      // Primary endpoint - Netlify Function
+      const endpoint = 'https://scansnap.io/.netlify/functions/validate-session'
       
       try {
-        // Try to decode the session token if it's a JWT or base64 encoded
-        let sessionData: any = null
+        console.log(`Calling validation endpoint: ${endpoint}`)
         
-        // Check if it's a JWT (has three parts separated by dots)
-        if (sessionToken.includes('.')) {
-          const parts = sessionToken.split('.')
-          if (parts.length >= 2) {
-            // Decode the payload (second part)
-            const decoded = atob(parts[1])
-            sessionData = JSON.parse(decoded)
-          }
-        } else {
-          // Try direct base64 decode
-          try {
-            const decoded = atob(sessionToken)
-            sessionData = JSON.parse(decoded)
-          } catch {
-            // Not base64 encoded
-          }
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout
+        
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({ sessionToken }),
+          signal: controller.signal
+        })
+        
+        clearTimeout(timeoutId)
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => null)
+          throw new Error(errorData?.error || `HTTP ${response.status}: ${response.statusText}`)
         }
         
-        // If we successfully decoded something with user info
-        if (sessionData && sessionData.email) {
-          const decodedSession: UserSession = {
-            userId: sessionData.userId || sessionData.sub || `user_${Date.now()}`,
-            email: sessionData.email,
-            firstName: sessionData.firstName || sessionData.given_name || '',
-            lastName: sessionData.lastName || sessionData.family_name || '',
-            subscription: sessionData.subscription || sessionData.plan || 'basic',
-            dashboardUrl: sessionData.dashboardUrl || 'https://scansnap.io/dashboard',
-            expiresAt: sessionData.expiresAt || sessionData.exp 
-              ? new Date((sessionData.exp || sessionData.expiresAt) * 1000).toISOString()
-              : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-          }
-          
-          console.log('✅ Using decoded session for:', decodedSession.email)
-          session.value = decodedSession
+        const data = await response.json()
+        console.log('API Response:', data)
+        
+        if (data.success && data.session) {
+          console.log('✅ Session validated:', data.session)
+          session.value = data.session
           error.value = null
           
-          // Store the decoded session
-          localStorage.setItem('scansnap_session', JSON.stringify(decodedSession))
+          // Store in localStorage for this session
+          localStorage.setItem('scansnap_session', JSON.stringify(data.session))
           localStorage.setItem('scansnap_session_token', sessionToken)
           localStorage.setItem('scansnap_session_timestamp', new Date().toISOString())
           
-          return decodedSession
+          return data.session
+        } else {
+          throw new Error(data.error || 'Invalid session response')
         }
-      } catch (decodeError) {
-        console.error('Failed to decode session token:', decodeError)
+        
+      } catch (fetchError: any) {
+        console.error('Validation error:', fetchError)
+        
+        // If it's a network/timeout error, try to decode the token as fallback
+        if (fetchError.name === 'AbortError' || 
+            (fetchError instanceof TypeError && fetchError.message.includes('Failed to fetch'))) {
+          
+          console.warn('🔌 Network error - attempting token decode fallback')
+          
+          // Try to extract basic info from token if possible
+          // Format might be: session_TIMESTAMP_RANDOM
+          const tokenParts = sessionToken.split('_')
+          if (tokenParts.length >= 2) {
+            // For development/offline mode - create a basic session
+            const fallbackSession: UserSession = {
+              userId: `user_${tokenParts[1]}`,
+              email: 'offline@example.com',
+              firstName: 'Offline',
+              lastName: 'User',
+              subscription: 'basic', // Conservative default
+              dashboardUrl: 'https://scansnap.io/dashboard',
+              expiresAt: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString() // 4 hours
+            }
+            
+            console.log('⚠️ Using offline fallback session (limited features)')
+            session.value = fallbackSession
+            error.value = 'Working offline with limited features'
+            
+            // Store the fallback session
+            localStorage.setItem('scansnap_session', JSON.stringify(fallbackSession))
+            localStorage.setItem('scansnap_session_token', sessionToken)
+            localStorage.setItem('scansnap_session_timestamp', new Date().toISOString())
+            
+            return fallbackSession
+          }
+        }
+        
+        throw fetchError
       }
       
-      // If we can't decode the token or reach the API, return minimal session
-      // This allows the app to work but with limited features
-      console.warn('⚠️ Could not validate or decode session, using standalone mode')
-      error.value = 'Unable to validate session. Running with limited features.'
-      
-      // Don't set a fake session - let the app run in standalone mode
-      clearSession()
-      throw new Error('Session validation failed')
-      
     } catch (err) {
-      console.error('❌ Session validation error:', err)
+      console.error('❌ Session validation failed:', err)
       
-      // Clear the session and show error
+      // Clear the session on validation failure
       clearSession()
-      error.value = 'Unable to validate session. Please return to the dashboard and try again.'
+      
+      // Set appropriate error message
+      if (err instanceof Error) {
+        if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+          error.value = 'Unable to connect to server. Please check your connection.'
+        } else if (err.message.includes('AbortError')) {
+          error.value = 'Connection timeout. Please try again.'
+        } else {
+          error.value = err.message
+        }
+      } else {
+        error.value = 'Session validation failed'
+      }
       
       throw err
     }
@@ -156,11 +136,14 @@ export function useSession() {
       const urlParams = new URLSearchParams(window.location.search)
       const sessionToken = urlParams.get('session')
       
+      console.log('🔍 Session check:')
+      console.log('  - URL:', window.location.href)
+      console.log('  - Token from URL:', sessionToken ? 'Found' : 'Not found')
+      
       if (sessionToken) {
-        console.log('📍 Found session in URL')
+        console.log('📍 Processing session from URL')
         
-        // IMPORTANT: Clear any existing session when new token arrives
-        // This ensures we don't show the wrong user
+        // Clear any existing session when new token arrives
         const existingToken = localStorage.getItem('scansnap_session_token')
         if (existingToken && existingToken !== sessionToken) {
           console.log('🔄 Different session token detected, clearing old session')
@@ -170,67 +153,82 @@ export function useSession() {
         try {
           await validateSession(sessionToken)
           
-          // Clean URL after successful validation
-          const cleanUrl = window.location.pathname + window.location.hash
-          window.history.replaceState({}, document.title, cleanUrl)
-        } catch (err) {
-          console.error('Failed to validate session from URL:', err)
-          // If validation fails, still clean the URL to prevent repeated attempts
-          const cleanUrl = window.location.pathname + window.location.hash
-          window.history.replaceState({}, document.title, cleanUrl)
+          // Clean URL after successful validation (remove session param)
+          const url = new URL(window.location.href)
+          url.searchParams.delete('session')
+          window.history.replaceState({}, document.title, url.toString())
           
-          // Set error but allow app to continue in standalone mode
+        } catch (err) {
+          console.error('Session validation failed:', err)
+          
+          // Still clean the URL to prevent repeated attempts
+          const url = new URL(window.location.href)
+          url.searchParams.delete('session')
+          window.history.replaceState({}, document.title, url.toString())
+          
+          // Allow app to continue in standalone mode
           error.value = 'Unable to validate session. Running in standalone mode.'
         }
+        
       } else {
-        // Check localStorage
+        // Check localStorage for existing session
         const stored = localStorage.getItem('scansnap_session')
         const storedToken = localStorage.getItem('scansnap_session_token')
         const storedTimestamp = localStorage.getItem('scansnap_session_timestamp')
         
+        console.log('📦 Checking stored session:')
+        console.log('  - Has session:', !!stored)
+        console.log('  - Has token:', !!storedToken)
+        console.log('  - Has timestamp:', !!storedTimestamp)
+        
         if (stored && storedToken && storedTimestamp) {
           try {
             const storedSession = JSON.parse(stored) as UserSession
+            console.log('  - Stored user:', storedSession.email)
+            console.log('  - Subscription:', storedSession.subscription)
             
             // Check if expired
-            if (new Date(storedSession.expiresAt) > new Date()) {
-              // Check if session is older than 1 hour (re-validate)
+            const expiresAt = new Date(storedSession.expiresAt)
+            const now = new Date()
+            
+            if (expiresAt > now) {
+              // Session still valid
               const sessionAge = Date.now() - new Date(storedTimestamp).getTime()
               const oneHour = 60 * 60 * 1000
               
               if (sessionAge < oneHour) {
-                console.log('📦 Using cached session (less than 1 hour old)')
+                console.log('✅ Using cached session (less than 1 hour old)')
                 session.value = storedSession
                 error.value = null
               } else {
-                console.log('🔄 Re-validating stored session (older than 1 hour)')
+                console.log('🔄 Session is old, attempting re-validation')
                 try {
                   await validateSession(storedToken)
                 } catch (err) {
-                  // If re-validation fails, continue with cached session
-                  console.warn('Re-validation failed, using cached session')
+                  console.warn('Re-validation failed, using cached session anyway')
                   session.value = storedSession
                   error.value = null
                 }
               }
             } else {
-              console.log('⏰ Stored session expired')
+              console.log('⏰ Stored session expired at:', expiresAt)
               clearSession()
             }
+            
           } catch (e) {
             console.error('Failed to parse stored session:', e)
             clearSession()
           }
         } else {
-          console.log('📭 No session found - running in standalone mode')
-          // No session found - this is OK for standalone usage
+          console.log('📭 No stored session - running in standalone mode')
         }
       }
+      
     } catch (err) {
-      console.error('Session check error:', err)
-      // Error already set in validateSession
+      console.error('Unexpected error during session check:', err)
     } finally {
       isLoading.value = false
+      console.log('✅ Session check complete')
     }
   }
   
@@ -243,47 +241,42 @@ export function useSession() {
   }
   
   const hasFeature = (feature: string): boolean => {
-    // Basic features and exports are always available to everyone
-    if (feature === 'basic' || feature === 'quick' || 
-        feature === 'export_csv' || feature === 'export_xlsx' || feature === 'export_pdf') {
+    // Basic features and all exports are always available to everyone
+    const freeFeatures = [
+      'basic', 'quick', 'export_csv', 'export_xlsx', 'export_pdf'
+    ]
+    
+    if (freeFeatures.includes(feature)) {
       return true
     }
     
-    // If no session, only allow basic features
+    // If no session, deny premium features
     if (!session.value) {
       return false
     }
     
     const { subscription } = session.value
     
-    // Plus features (verify and builder modes)
-    if (feature === 'verify' || feature === 'builder') {
-      return ['plus', 'pro', 'pro_dpms'].includes(subscription)
+    // Define feature tiers
+    const featureTiers: Record<string, string[]> = {
+      basic: [],
+      plus: ['verify', 'builder', 'catalog_import'],
+      pro: ['verify', 'builder', 'catalog_import', 'qr', 'datamatrix', 'aztec', 'matrix_codes'],
+      pro_dpms: [
+        'verify', 'builder', 'catalog_import', 
+        'qr', 'datamatrix', 'aztec', 'matrix_codes',
+        'dpms', 'micro_qr', 'rm_qr'
+      ]
     }
     
-    // Pro features (advanced 2D codes)
-    if (feature === 'qr' || feature === 'datamatrix' || feature === 'aztec' || feature === 'matrix_codes') {
-      return ['pro', 'pro_dpms'].includes(subscription)
-    }
-    
-    // Pro DPMS features (specialized DPMS barcodes)
-    if (feature === 'dpms' || feature === 'micro_qr' || feature === 'rm_qr') {
-      return subscription === 'pro_dpms'
-    }
-    
-    // Catalog features
-    if (feature === 'catalog_import') {
-      return ['plus', 'pro', 'pro_dpms'].includes(subscription)
-    }
-    
-    // Default deny for unknown features
-    return false
+    const allowedFeatures = featureTiers[subscription] || []
+    return allowedFeatures.includes(feature)
   }
   
   const getSubscriptionLabel = (): string => {
     if (!session.value) return 'Basic'
     
-    const labels = {
+    const labels: Record<string, string> = {
       basic: 'Basic',
       plus: 'Plus',
       pro: 'Professional',
@@ -297,11 +290,39 @@ export function useSession() {
     return session.value !== null && session.value.subscription !== 'basic'
   }
   
-  // Force refresh session (useful when switching users)
   const refreshSession = async () => {
-    console.log('🔄 Force refreshing session...')
-    clearSession() // Clear everything first
-    await checkSession() // Re-check from URL or storage
+    console.log('🔄 Manually refreshing session...')
+    clearSession()
+    await checkSession()
+  }
+  
+  // Manual session setter for development/testing
+  const setManualSession = (
+    email: string, 
+    subscription: UserSession['subscription'] = 'plus',
+    firstName: string = 'Test',
+    lastName: string = 'User'
+  ) => {
+    const manualSession: UserSession = {
+      userId: `user_manual_${Date.now()}`,
+      email,
+      firstName,
+      lastName,
+      subscription,
+      dashboardUrl: 'https://scansnap.io/dashboard',
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+    }
+    
+    session.value = manualSession
+    error.value = null
+    
+    localStorage.setItem('scansnap_session', JSON.stringify(manualSession))
+    localStorage.setItem('scansnap_session_token', `manual_${Date.now()}`)
+    localStorage.setItem('scansnap_session_timestamp', new Date().toISOString())
+    
+    console.log('✅ Manual session set for:', email, '(' + subscription + ')')
+    
+    return manualSession
   }
   
   // Initialize session check on mount
@@ -310,15 +331,21 @@ export function useSession() {
   })
   
   return {
+    // State
     session,
     isLoading,
     error,
+    
+    // Methods
     validateSession,
     clearSession,
     hasFeature,
     checkSession,
     getSubscriptionLabel,
     isSubscribed,
-    refreshSession
+    refreshSession,
+    
+    // Development helpers (remove in production if needed)
+    setManualSession
   }
 }
