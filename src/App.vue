@@ -1,92 +1,81 @@
-<!-- src/App.vue - FIXED VERSION -->
 <template>
   <div class="container">
     <!-- Header -->
     <AppHeader :isDark="isDark" @toggle-theme="toggleTheme" />
     
-    <!-- Session Status Bar -->
-    <div v-if="session && !error" style="
-      display: flex; 
-      justify-content: space-between; 
-      align-items: center; 
-      padding: 8px 16px; 
-      background: var(--panel2); 
-      border-bottom: 1px solid var(--muted);
-      font-size: 0.875rem;
-    ">
-      <div style="display: flex; align-items: center; gap: 12px;">
-        <span style="color: var(--text-dim)">
-          {{ session.firstName && session.lastName ? `${session.firstName} ${session.lastName}` : session.email }}
-        </span>
-        <span :style="`
-          background: ${session.subscription === 'plus' ? '#10b981' : 
-                       session.subscription === 'pro' ? '#3b82f6' : 
-                       session.subscription === 'pro_dpms' ? '#8b5cf6' : '#6b7280'}; 
-          color: white; 
-          padding: 2px 8px; 
-          border-radius: 4px; 
-          font-size: 0.75rem; 
-          font-weight: 600;
-          text-transform: uppercase;
-        `">
-          {{ session.subscription === 'pro_dpms' ? 'PRO+DPMS' : session.subscription.toUpperCase() }}
-        </span>
-      </div>
-      <a 
-        :href="session.dashboardUrl" 
-        style="color: var(--brand); text-decoration: none;"
-      >
-        ← Back to Dashboard
-      </a>
+    <!-- Session Status Bar (when logged in) -->
+    <div v-if="session && !error" style="...">
+      <!-- existing session status bar content -->
     </div>
     
-    <!-- Loading State (very brief) -->
-    <div v-if="isLoading && !session && !error" style="
-      padding: 12px 16px;
-      background: var(--panel2);
-      border-bottom: 1px solid var(--muted);
-      text-align: center;
-      color: var(--text-dim);
-      font-size: 0.875rem;
-    ">
+    <!-- Loading State -->
+    <div v-if="isLoading && !session && !error" style="...">
       Checking session...
     </div>
     
-    <!-- Standalone Mode Info Bar (when no session from URL) -->
-    <div v-if="!session && !isLoading && !error && !hasSessionInUrl" style="
-      padding: 8px 16px;
-      background: var(--panel2);
-      border-bottom: 1px solid var(--muted);
-      font-size: 0.875rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    ">
-      <span style="color: var(--text-dim)">
-        Using ScanSnap in standalone mode • Limited features available
-      </span>
-      <a 
-        href="https://scansnap.io/dashboard" 
-        style="color: var(--brand); text-decoration: none;"
-      >
-        Sign in for full features →
-      </a>
-    </div>
-    
-    <!-- Error State (only if session was expected but failed) -->
-    <div v-if="error && hasSessionInUrl" style="
-      padding: 12px 16px;
-      background: rgba(239, 68, 68, 0.1);
+    <!-- LOGIN REQUIRED STATE - Replace the "Standalone Mode Info Bar" section -->
+    <div v-if="!session && !isLoading && (requiresLogin || !hasSessionInUrl)" style="
+      padding: 16px;
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(251, 146, 60, 0.1));
       border: 1px solid var(--bad);
-      border-bottom: 1px solid var(--bad);
-      color: var(--bad);
-      font-size: 0.875rem;
+      text-align: center;
     ">
-      <strong>Session Error:</strong> Unable to validate session. 
-      <a href="https://scansnap.io/dashboard" style="color: var(--brand); margin-left: 8px;">
-        Return to dashboard →
-      </a>
+      <h3 style="color: var(--bad); margin: 0 0 8px 0; font-size: 1.125rem;">
+        🔒 Login Required
+      </h3>
+      <p style="color: var(--text-dim); margin: 0 0 16px 0; font-size: 0.875rem;">
+        You must be logged in to use ScanSnap. Your data stays on your device, but we need to verify your subscription.
+      </p>
+      <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+        <a 
+          href="https://scansnap.io/login?redirect_url=/dashboard" 
+          style="
+            display: inline-flex;
+            align-items: center;
+            padding: 10px 20px;
+            background: var(--brand);
+            color: white;
+            border-radius: 999px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.875rem;
+          "
+        >
+          Login to ScanSnap →
+        </a>
+        <a 
+          href="https://scansnap.io/signup" 
+          style="
+            display: inline-flex;
+            align-items: center;
+            padding: 10px 20px;
+            background: transparent;
+            color: var(--brand);
+            border: 1px solid var(--brand);
+            border-radius: 999px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.875rem;
+          "
+        >
+          Create Account
+        </a>
+      </div>
     </div>
+
+<!-- Error State (for actual errors) -->
+<div v-else-if="error && hasSessionInUrl" style="
+  padding: 12px 16px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid var(--bad);
+  color: var(--bad);
+  font-size: 0.875rem;
+">
+  <strong>Session Error:</strong> {{ error }}
+  <a href="https://scansnap.io/dashboard" style="color: var(--brand); margin-left: 8px;">
+    Return to dashboard →
+  </a>
+</div>
 
     <!-- Tabs -->
     <TabNavigation v-model="tab" />
@@ -300,11 +289,13 @@ const { session, hasFeature, isLoading, error } = useSession()
 
 // Check if session was expected from URL
 const hasSessionInUrl = ref(false)
+const requiresLogin = ref(false)
 
 // Initialize hasSessionInUrl immediately
 if (typeof window !== 'undefined') {
   const urlParams = new URLSearchParams(window.location.search)
   hasSessionInUrl.value = urlParams.has('session')
+  requiresLogin.value = urlParams.has('login-required') || urlParams.has('no-session')
 }
 
 // LocalStorage keys

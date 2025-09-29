@@ -140,74 +140,110 @@ export function useSession() {
   }
 
   const checkSession = async () => {
-    isLoading.value = true
-    error.value = null
+  isLoading.value = true
+  error.value = null
+  
+  try {
+    // Check URL params
+    const urlParams = new URLSearchParams(window.location.search)
+    const sessionToken = urlParams.get('session')
+    const noSession = urlParams.get('no-session')
+    const loginRequired = urlParams.get('login-required')
     
-    try {
-      // Check URL params first
-      const urlParams = new URLSearchParams(window.location.search)
-      const sessionToken = urlParams.get('session')
+    console.log('🔍 Session check:')
+    console.log('  - URL:', window.location.href)
+    console.log('  - Token from URL:', sessionToken ? 'Found' : 'Not found')
+    console.log('  - No session flag:', noSession)
+    console.log('  - Login required flag:', loginRequired)
+    
+    // Clear URL parameters after reading
+    const cleanUrl = () => {
+      const url = new URL(window.location.href)
+      url.searchParams.delete('session')
+      url.searchParams.delete('no-session') 
+      url.searchParams.delete('login-required')
+      window.history.replaceState({}, document.title, url.toString())
+    }
+    
+    // Handle explicit no-session or login-required flags
+    if (noSession === 'true' || loginRequired === 'true') {
+      console.log('📭 Explicit no-session or login-required flag detected')
       
-      console.log('🔍 Session check:')
-      console.log('  - URL:', window.location.href)
-      console.log('  - Token from URL:', sessionToken ? 'Found' : 'Not found')
+      // Clear any cached session data
+      clearSession()
       
-      if (sessionToken) {
-        console.log('📍 Processing session from URL')
-        
-        const result = await validateSession(sessionToken)
-        
-        if (result) {
-          // Clean URL after successful validation
-          const url = new URL(window.location.href)
-          url.searchParams.delete('session')
-          window.history.replaceState({}, document.title, url.toString())
-        }
-        
+      // Set error to trigger login prompt
+      error.value = 'Login required to use ScanSnap'
+      session.value = null
+      
+      cleanUrl()
+      isLoading.value = false
+      return
+    }
+    
+    if (sessionToken) {
+      console.log('📍 Processing session from URL')
+      const result = await validateSession(sessionToken)
+      
+      if (result) {
+        cleanUrl()
       } else {
-        // Check localStorage for existing session
-        const stored = localStorage.getItem('scansnap_session')
-        const storedToken = localStorage.getItem('scansnap_session_token')
-        const storedTimestamp = localStorage.getItem('scansnap_session_timestamp')
-        
-        if (stored && storedToken && storedTimestamp) {
-          try {
-            const storedSession = JSON.parse(stored) as UserSession
-            const expiresAt = new Date(storedSession.expiresAt)
-            const now = new Date()
+        error.value = 'Invalid session. Please login again.'
+        clearSession()
+      }
+    } else {
+      // Check localStorage for existing session
+      const stored = localStorage.getItem('scansnap_session')
+      const storedToken = localStorage.getItem('scansnap_session_token')
+      const storedTimestamp = localStorage.getItem('scansnap_session_timestamp')
+      
+      if (stored && storedToken && storedTimestamp) {
+        try {
+          const storedSession = JSON.parse(stored) as UserSession
+          const expiresAt = new Date(storedSession.expiresAt)
+          const now = new Date()
+          
+          if (expiresAt > now) {
+            const sessionAge = Date.now() - new Date(storedTimestamp).getTime()
+            const oneHour = 60 * 60 * 1000
             
-            if (expiresAt > now) {
-              const sessionAge = Date.now() - new Date(storedTimestamp).getTime()
-              const oneHour = 60 * 60 * 1000
-              
-              if (sessionAge < oneHour) {
-                console.log('✅ Using cached session')
-                session.value = storedSession
-              } else {
-                // Try to revalidate
-                console.log('🔄 Revalidating old session')
-                await validateSession(storedToken)
-              }
+            if (sessionAge < oneHour) {
+              console.log('✅ Using cached session')
+              session.value = storedSession
             } else {
-              console.log('⏰ Stored session expired')
-              clearSession()
+              // Try to revalidate
+              console.log('🔄 Revalidating old session')
+              const revalidated = await validateSession(storedToken)
+              if (!revalidated) {
+                error.value = 'Session expired. Please login again.'
+                clearSession()
+              }
             }
-          } catch (e) {
-            console.error('Failed to parse stored session:', e)
+          } else {
+            console.log('⏰ Stored session expired')
+            error.value = 'Session expired. Please login again.'
             clearSession()
           }
-        } else {
-          console.log('📭 No session - running in standalone mode')
+        } catch (e) {
+          console.error('Failed to parse stored session:', e)
+          error.value = 'Invalid session data. Please login again.'
+          clearSession()
         }
+      } else {
+        console.log('📭 No session - login required')
+        error.value = 'Login required to use ScanSnap'
       }
-      
-    } catch (err) {
-      console.error('Unexpected error during session check:', err)
-    } finally {
-      isLoading.value = false
-      console.log('✅ Session check complete')
     }
+    
+  } catch (err) {
+    console.error('Unexpected error during session check:', err)
+    error.value = 'Session validation failed. Please login again.'
+    clearSession()
+  } finally {
+    isLoading.value = false
+    console.log('✅ Session check complete')
   }
+}
 
   const clearSession = () => {
     session.value = null
