@@ -139,189 +139,190 @@
   </a>
 </div>
 
-    <!-- Tabs -->
-    <TabNavigation v-model="tab" />
+    <!-- Main App Content (only when logged in) -->
+    <template v-if="session && !error && !isLoading">
+      <!-- Tabs -->
+      <TabNavigation v-model="tab" />
 
-    <!-- SCAN TAB -->
-    <div v-if="tab==='scan'" class="panel scan-panel">
-      <div class="scan-layout">
-        <!-- LEFT SIDE: Camera/Scanner -->
-        <div class="scan-left">
-          <!-- Camera Mode -->
-          <template v-if="scannerMode === 'camera'">
-            <!-- Scanner Controls -->
-            <ScannerControls 
-              :scanning="scanning"
-              :devices="devices"
-              :selectedDeviceId="selectedDeviceId"
-              :manualCode="manualCode"
-              @toggle-camera="toggleCamera"
-              @request-permission="requestPermission"
-              @device-change="onDeviceChange"
-              @update:manualCode="manualCode = $event"
-              @process-manual-code="processManualCode"
-            />
-
-            <!-- Camera View -->
-            <CameraView
-              ref="cameraViewRef"
-              :scanning="scanning"
-              :torchSupported="torchSupported"
-              :torchOn="torchOn"
-              :toast="toast"
-              :cameraConstraints="cameraConstraints"
-              :activeFormats="activeFormats"
-              :paintTrack="paintTrack"
-              @toggle-torch="toggleTorch"
-              @camera-ready="onCameraReady"
-              @error="onError"
-            />
-
-            <!-- Tap-to-add -->
-            <div class="row" style="margin-top:8px">
-              <button class="btn" style="flex:1" :disabled="!canTap" @click="tapToAdd">{{ tapLabel }}</button>
-            </div>
-          </template>
-
-          <!-- External Scanner Mode -->
-          <template v-else>
-            <ExternalScannerInput
-              :enabled="tab === 'scan' && scannerMode === 'external'"
-              @scanned="handleExternalScan"
-            />
-            
-            <!-- Manual entry still available for external scanners -->
-            <div class="row" style="margin-top:8px">
-              <input 
-                class="input" 
-                v-model="manualCode" 
-                @keyup.enter="processManualCode"
-                placeholder="Or enter barcode manually..." 
-                style="flex:1"
+      <!-- SCAN TAB -->
+      <div v-if="tab==='scan'" class="panel scan-panel">
+        <div class="scan-layout">
+          <!-- LEFT SIDE: Camera/Scanner -->
+          <div class="scan-left">
+            <!-- Camera Mode -->
+            <template v-if="scannerMode === 'camera'">
+              <!-- Scanner Controls -->
+              <ScannerControls 
+                :scanning="scanning"
+                :devices="devices"
+                :selectedDeviceId="selectedDeviceId"
+                :manualCode="manualCode"
+                @toggle-camera="toggleCamera"
+                @request-permission="requestPermission"
+                @device-change="onDeviceChange"
+                @update:manualCode="manualCode = $event"
+                @process-manual-code="processManualCode"
               />
-              <button class="btn ghost" @click="processManualCode" :disabled="!manualCode.trim()">Add</button>
-            </div>
-          </template>
-        </div>
 
-        <!-- RIGHT SIDE: Modes and Data -->
-        <div class="scan-right">
-          <!-- Recent + Modes -->
-          <div class="mini">
-            <span class="kbd">Recent</span>
-            <span style="font-weight:700">{{ last.code || '—' }}</span>
-            <template v-if="last.code">
-              <button class="icon-btn" @click="decLast">−</button>
-              <span>{{ last.qty }}</span>
-              <button class="icon-btn" @click="incLast">＋</button>
+              <!-- Camera View -->
+              <CameraView
+                ref="cameraViewRef"
+                :scanning="scanning"
+                :torchSupported="torchSupported"
+                :torchOn="torchOn"
+                :toast="toast"
+                :cameraConstraints="cameraConstraints"
+                :activeFormats="activeFormats"
+                :paintTrack="paintTrack"
+                @toggle-torch="toggleTorch"
+                @camera-ready="onCameraReady"
+                @error="onError"
+              />
+
+              <!-- Tap-to-add -->
+              <div class="row" style="margin-top:8px">
+                <button class="btn" style="flex:1" :disabled="!canTap" @click="tapToAdd">{{ tapLabel }}</button>
+              </div>
+            </template>
+
+            <!-- External Scanner Mode -->
+            <template v-else>
+              <ExternalScannerInput
+                :enabled="tab === 'scan' && scannerMode === 'external'"
+                @scanned="handleExternalScan"
+              />
+              
+              <!-- Manual entry still available for external scanners -->
+              <div class="row" style="margin-top:8px">
+                <input 
+                  class="input" 
+                  v-model="manualCode" 
+                  @keyup.enter="processManualCode"
+                  placeholder="Or enter barcode manually..." 
+                  style="flex:1"
+                />
+                <button class="btn ghost" @click="processManualCode" :disabled="!manualCode.trim()">Add</button>
+              </div>
             </template>
           </div>
-          
-          <div class="chips" style="margin-top:6px">
-            <button class="tab" :class="{active:mode==='quick'}" @click="setMode('quick')">
-              QUICK LIST
-            </button>
-            <button 
-              class="tab" 
-              :class="{active:mode==='verify', disabled: !hasFeature('verify')}" 
-              @click="hasFeature('verify') ? setMode('verify') : showSubscriptionAlert('verify')"
-              :title="!hasFeature('verify') ? 'Requires Plus subscription or higher' : ''"
-            >
-              CATALOG VERIFY
-              <span v-if="!hasFeature('verify')" style="font-size: 0.7rem; display: block;">🔒 Plus+</span>
-            </button>
-            <button 
-              class="tab" 
-              :class="{active:mode==='builder', disabled: !hasFeature('builder')}" 
-              @click="hasFeature('builder') ? setMode('builder') : showSubscriptionAlert('builder')"
-              :title="!hasFeature('builder') ? 'Requires Plus subscription or higher' : ''"
-            >
-              ORDER BUILDER
-              <span v-if="!hasFeature('builder')" style="font-size: 0.7rem; display: block;">🔒 Plus+</span>
-            </button>
-          </div>
 
-          <!-- Mode Components -->
-          <div class="mode-content">
-            <QuickListMode
-              v-if="mode==='quick'"
-              :entries="quickEntries"
-              @change-qty="(code, delta) => changeQty('quick', code, delta)"
-              @remove-item="(code) => removeItem('quick', code)"
-              @export="(type) => exportQuick(type)"
-              @clear="clearMode('quick')"
-            />
+          <!-- RIGHT SIDE: Modes and Data -->
+          <div class="scan-right">
+            <!-- Recent + Modes -->
+            <div class="mini">
+              <span class="kbd">Recent</span>
+              <span style="font-weight:700">{{ last.code || '—' }}</span>
+              <template v-if="last.code">
+                <button class="icon-btn" @click="decLast">−</button>
+                <span>{{ last.qty }}</span>
+                <button class="icon-btn" @click="incLast">＋</button>
+              </template>
+            </div>
+            
+            <div class="chips" style="margin-top:6px">
+              <button class="tab" :class="{active:mode==='quick'}" @click="setMode('quick')">
+                QUICK LIST
+              </button>
+              <button 
+                class="tab" 
+                :class="{active:mode==='verify', disabled: !hasFeature('verify')}" 
+                @click="hasFeature('verify') ? setMode('verify') : showSubscriptionAlert('verify')"
+                :title="!hasFeature('verify') ? 'Requires Plus subscription or higher' : ''"
+              >
+                CATALOG VERIFY
+                <span v-if="!hasFeature('verify')" style="font-size: 0.7rem; display: block;">🔒 Plus+</span>
+              </button>
+              <button 
+                class="tab" 
+                :class="{active:mode==='builder', disabled: !hasFeature('builder')}" 
+                @click="hasFeature('builder') ? setMode('builder') : showSubscriptionAlert('builder')"
+                :title="!hasFeature('builder') ? 'Requires Plus subscription or higher' : ''"
+              >
+                ORDER BUILDER
+                <span v-if="!hasFeature('builder')" style="font-size: 0.7rem; display: block;">🔒 Plus+</span>
+              </button>
+            </div>
 
-            <VerifyMode
-              v-if="mode==='verify'"
-              :verifyRows="verifyRows"
-              @remove-verify="removeVerify"
-              @export="(type) => exportVerify(type)"
-              @clear="clearMode('verify')"
-            />
+            <!-- Mode Components -->
+            <div class="mode-content">
+              <QuickListMode
+                v-if="mode==='quick'"
+                :entries="quickEntries"
+                @change-qty="(code, delta) => changeQty('quick', code, delta)"
+                @remove-item="(code) => removeItem('quick', code)"
+                @export="(type) => exportQuick(type)"
+                @clear="clearMode('quick')"
+              />
 
-            <BuilderMode
-              v-if="mode==='builder'"
-              :builderRows="builderRows"
-              @set-desc="setBuilderDesc"
-              @focus-desc="editingCode = $event"
-              @blur-desc="onDescBlur"
-              @change-qty="(code, delta) => changeQty('builder', code, delta)"
-              @remove-item="(code) => removeItem('builder', code)"
-              @export="(type) => exportBuilder(type)"
-              @clear="clearMode('builder')"
-            />
+              <VerifyMode
+                v-if="mode==='verify'"
+                :verifyRows="verifyRows"
+                @remove-verify="removeVerify"
+                @export="(type) => exportVerify(type)"
+                @clear="clearMode('verify')"
+              />
+
+              <BuilderMode
+                v-if="mode==='builder'"
+                :builderRows="builderRows"
+                @set-desc="setBuilderDesc"
+                @focus-desc="editingCode = $event"
+                @blur-desc="onDescBlur"
+                @change-qty="(code, delta) => changeQty('builder', code, delta)"
+                @remove-item="(code) => removeItem('builder', code)"
+                @export="(type) => exportBuilder(type)"
+                @clear="clearMode('builder')"
+              />
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- CATALOG TAB -->
-    <CatalogTab
-      v-else-if="tab==='catalog'"
-      :catalogSize="catalog.size"
-      :columns="columns"
-      :barcodeCol="barcodeCol"
-      :descCol="descCol"
-      :search="search"
-      :searchBarcode="searchBarcode"
-      :importStats="importStats"
-      :filteredCatalog="filteredCatalog"
-      :hasImportFeature="hasFeature('catalog_import')"
-      @file-change="onFile"
-      @update:barcodeCol="barcodeCol = $event"
-      @update:descCol="descCol = $event"
-      @update:search="search = $event"
-      @update:searchBarcode="searchBarcode = $event"
-      @clear-catalog="clearCatalog"
-    />
+      <!-- CATALOG TAB -->
+      <CatalogTab
+        v-else-if="tab==='catalog'"
+        :catalogSize="catalog.size"
+        :columns="columns"
+        :barcodeCol="barcodeCol"
+        :descCol="descCol"
+        :search="search"
+        :searchBarcode="searchBarcode"
+        :importStats="importStats"
+        :filteredCatalog="filteredCatalog"
+        :hasImportFeature="hasFeature('catalog_import')"
+        @file-change="onFile"
+        @update:barcodeCol="barcodeCol = $event"
+        @update:descCol="descCol = $event"
+        @update:search="search = $event"
+        @update:searchBarcode="searchBarcode = $event"
+        @clear-catalog="clearCatalog"
+      />
 
-    <!-- SETUP TAB -->
-    <SetupTab
-      v-else
-      :scannerMode="scannerMode"
-      :validateCD="validateCD"
-      :stripCD="stripCD"
-      :beep="beep"
-      :linearOn="linearOn"
-      :matrixOn="matrixOn"
-      :formatList="formatList"
-      :trims="trims"
-      :enabled="enabled"
-      @update:scannerMode="scannerMode = $event"
-      @update:validateCD="validateCD = $event"
-      @update:stripCD="stripCD = $event"
-      @update:beep="beep = $event"
-      @toggle-linear="toggleLinear"
-      @toggle-matrix="toggleMatrix"
-      @enable-all="enableAll"
-      @disable-all="disableAll"
-      @clear-all-trims="clearAllTrims"
-      @update-trim="(format, field, value) => { trims[format][field] = value }"
-      @update-enabled="(format, value) => { enabled[format] = value }"
-    />
-  </div>
-</template>
+      <!-- SETUP TAB -->
+      <SetupTab
+        v-else
+        :scannerMode="scannerMode"
+        :validateCD="validateCD"
+        :stripCD="stripCD"
+        :beep="beep"
+        :linearOn="linearOn"
+        :matrixOn="matrixOn"
+        :formatList="formatList"
+        :trims="trims"
+        :enabled="enabled"
+        @update:scannerMode="scannerMode = $event"
+        @update:validateCD="validateCD = $event"
+        @update:stripCD="stripCD = $event"
+        @update:beep="beep = $event"
+        @toggle-linear="toggleLinear"
+        @toggle-matrix="toggleMatrix"
+        @enable-all="enableAll"
+        @disable-all="disableAll"
+        @clear-all-trims="clearAllTrims"
+        @update-trim="(format, field, value) => { trims[format][field] = value }"
+        @update-enabled="(format, value) => { enabled[format] = value }"
+      />
+    </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
