@@ -347,7 +347,7 @@ import SetupTab from './components/SetupTab.vue'
 
 // Session management
 import { useSession } from './composables/useSession'
-const { session, hasFeature, isLoading, error } = useSession()
+const { session, hasFeature, isLoading, error, getSubscriptionLabel, clearSession } = useSession()
 
 // Check if session was expected from URL
 const hasSessionInUrl = ref(false)
