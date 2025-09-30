@@ -1,37 +1,16 @@
-# netlify.toml
+# netlify.toml for the Vue scanner app
 
 [build]
   command = "npm run build"
-  publish = ".next"
+  publish = "dist"
 
 [build.environment]
-  NEXT_PUBLIC_SUPABASE_URL = "your-supabase-url"
-  NEXT_PUBLIC_SUPABASE_ANON_KEY = "your-supabase-anon-key"
-  NEXT_PUBLIC_APP_URL = "https://app.scansnap.io"
-  NEXT_PUBLIC_PORTAL_URL = "https://scansnap.io"
-
-[[redirects]]
-  from = "/api/*"
-  to = "/api/:splat"
-  status = 200
-  force = true
+  NODE_VERSION = "18"
+  NODE_OPTIONS = "--max_old_space_size=4096"
 
 [[headers]]
-  for = "/api/*"
+  for = "/*"
   [headers.values]
-    Access-Control-Allow-Origin = "https://app.scansnap.io"
-    Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
-    Access-Control-Allow-Headers = "Content-Type, Authorization"
-
-# Handle SPA routing for Next.js
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
-  conditions = {Role = ["admin", "user"]}
-  force = false
-
-# Functions configuration
-[functions]
-  directory = "netlify/functions"
-  node_bundler = "esbuild"
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    X-XSS-Protection = "1; mode=block"
