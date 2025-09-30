@@ -3,11 +3,73 @@
     <!-- Header -->
     <AppHeader :isDark="isDark" @toggle-theme="toggleTheme" />
     
-    <!-- Session Status Bar (when logged in) -->
-    <div v-if="session && !error" style="...">
-      <!-- existing session status bar content -->
+   <!-- Session Status Bar (when logged in) -->
+<div v-if="session && !error" style="
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.1));
+  border: 1px solid var(--brand);
+  border-radius: 10px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+">
+  <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+    <span style="font-size: 1.25rem;">👤</span>
+    <div>
+      <div style="font-weight: 600; font-size: 0.95rem;">
+        {{ session.firstName }} {{ session.lastName }}
+      </div>
+      <div style="font-size: 0.8rem; color: var(--text-dim);">
+        {{ session.email }}
+      </div>
     </div>
-    
+    <span style="
+      padding: 4px 10px;
+      background: var(--brand);
+      color: white;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    ">
+      {{ getSubscriptionLabel() }}
+    </span>
+  </div>
+  <div style="display: flex; gap: 8px; align-items: center;">
+    <a 
+      :href="session.dashboardUrl" 
+      style="
+        padding: 6px 14px;
+        background: var(--brand);
+        color: white;
+        border-radius: 999px;
+        text-decoration: none;
+        font-size: 0.85rem;
+        font-weight: 600;
+      "
+    >
+      Dashboard →
+    </a>
+    <button 
+      @click="clearSession" 
+      style="
+        padding: 6px 14px;
+        background: transparent;
+        color: var(--bad);
+        border: 1px solid var(--bad);
+        border-radius: 999px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+      "
+    >
+      Logout
+    </button>
+  </div>
+</div>
     <!-- Loading State -->
     <div v-if="isLoading && !session && !error" style="...">
       Checking session...
