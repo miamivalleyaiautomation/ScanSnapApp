@@ -72,9 +72,9 @@
       <p style="text-align: center; color: var(--text-dim); padding: 40px 20px;">
         Import your product catalog to enable barcode verification and automated product descriptions.
         <br><br>
-        <a href="https://scansnap.io/pricing" target="_blank" style="color: var(--brand)">
-          View subscription plans →
-        </a>
+        <a href="https://scansnap.io/dashboard" target="_blank" style="color: var(--brand)">
+      Go to dashboard →
+    </a>
       </p>
     </div>
     
