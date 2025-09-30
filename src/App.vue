@@ -321,8 +321,10 @@
         @clear-all-trims="clearAllTrims"
         @update-trim="(format, field, value) => { trims[format][field] = value }"
         @update-enabled="(format, value) => { enabled[format] = value }"
-      />
+     />
     </template>
+  </div>
+</template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
