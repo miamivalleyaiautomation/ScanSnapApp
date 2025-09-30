@@ -307,7 +307,21 @@ export function useSession() {
     console.log('🔄 Manually refreshing session...')
     await checkSession()
   }
-
+if (typeof window !== 'undefined') {
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'scansnap_session' && e.newValue === null) {
+        console.log('🚪 Session cleared detected - logging out')
+        clearSession()
+        error.value = 'Login required to use ScanSnap'
+      }
+    })
+    
+    window.addEventListener('scansnap-logout', () => {
+      console.log('🚪 Logout event received')
+      clearSession()
+      error.value = 'Login required to use ScanSnap'
+    })
+  }
   // Initialize session check on mount
   onMounted(() => {
     checkSession()

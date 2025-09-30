@@ -54,7 +54,7 @@
       Dashboard →
     </a>
     <button 
-      @click="clearSession" 
+      @click="handleLogout" 
       style="
         padding: 6px 14px;
         background: transparent;
@@ -351,6 +351,23 @@ import SetupTab from './components/SetupTab.vue'
 // Session management
 import { useSession } from './composables/useSession'
 const { session, hasFeature, isLoading, error, getSubscriptionLabel, clearSession } = useSession()
+
+function handleLogout() {
+  // Clear the session
+  clearSession()
+  
+  // Force the login screen to show by updating reactive state
+  error.value = 'Login required to use ScanSnap'
+  
+  // Clear the URL to remove any session parameters
+  const url = new URL(window.location.href)
+  url.searchParams.delete('session')
+  url.search = 'login-required=true'
+  window.history.replaceState({}, document.title, url.toString())
+  
+  // Show feedback
+  showToast('Logged out successfully')
+}
 
 // Check if session was expected from URL
 const hasSessionInUrl = ref(false)
