@@ -53,17 +53,19 @@
     >
       Dashboard →
     </a>
-    <button 
-      @click="handleLogout" 
-      style="
-        padding: 6px 14px;
-        background: transparent;
-        color: var(--bad);
-        border: 1px solid var(--bad);
-        border-radius: 999px;
-        font-size: 0.85rem;
-        font-weight: 600;
-        cursor: pointer;
+ <button 
+  @click="returnToDashboard" 
+  style="
+    padding: 6px 14px;
+    background: transparent;
+    color: var(--brand);
+    border: 1px solid var(--brand);
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+  "
+>
       "
     >
       Logout
