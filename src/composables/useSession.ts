@@ -20,16 +20,13 @@ export function useSession() {
     try {
       console.log('🔐 Validating session with token:', sessionToken.substring(0, 20) + '...')
       
-      // Use the correct domain for API calls
       const apiBaseUrl = import.meta.env.VITE_API_URL || 'https://scansnap.io'
-      
-      // Use GET method with query params for cross-domain compatibility
       const endpoint = `${apiBaseUrl}/api/app/session/validate?token=${encodeURIComponent(sessionToken)}`
       
       console.log(`📡 Calling validation endpoint: ${endpoint}`)
       
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 10000)
       
       try {
         const response = await fetch(endpoint, {
@@ -38,7 +35,7 @@ export function useSession() {
             'Accept': 'application/json',
           },
           mode: 'cors',
-          credentials: 'omit', // Don't send cookies cross-domain
+          credentials: 'omit',
           signal: controller.signal
         })
         
@@ -60,7 +57,6 @@ export function useSession() {
           session.value = data.session
           error.value = null
           
-          // Store in localStorage for this session
           localStorage.setItem('scansnap_session', JSON.stringify(data.session))
           localStorage.setItem('scansnap_session_token', sessionToken)
           localStorage.setItem('scansnap_session_timestamp', new Date().toISOString())
@@ -73,13 +69,11 @@ export function useSession() {
       } catch (fetchError: any) {
         console.error('❌ Fetch error:', fetchError)
         
-        // Network error fallback - allow basic offline mode
         if (fetchError.name === 'AbortError' || 
             (fetchError instanceof TypeError && fetchError.message.includes('Failed to fetch'))) {
           
           console.warn('🔌 Network error - attempting offline mode')
           
-          // Check if we have a cached session
           const cached = localStorage.getItem('scansnap_session')
           if (cached) {
             try {
@@ -97,7 +91,6 @@ export function useSession() {
             }
           }
           
-          // Create basic offline session
           const fallbackSession: UserSession = {
             userId: `offline_${Date.now()}`,
             email: 'offline@mode.local',
@@ -134,116 +127,105 @@ export function useSession() {
         error.value = 'Session validation failed'
       }
       
-      // Don't throw - allow app to work in standalone mode
       return null
     }
   }
 
   const checkSession = async () => {
-  isLoading.value = true
-  error.value = null
-  
-  try {
-    // Check URL params
-    const urlParams = new URLSearchParams(window.location.search)
-    const sessionToken = urlParams.get('session')
-    const noSession = urlParams.get('no-session')
-    const loginRequired = urlParams.get('login-required')
+    isLoading.value = true
+    error.value = null
     
-    console.log('🔍 Session check:')
-    console.log('  - URL:', window.location.href)
-    console.log('  - Token from URL:', sessionToken ? 'Found' : 'Not found')
-    console.log('  - No session flag:', noSession)
-    console.log('  - Login required flag:', loginRequired)
-    
-    // Clear URL parameters after reading
-    const cleanUrl = () => {
-      const url = new URL(window.location.href)
-      url.searchParams.delete('session')
-      url.searchParams.delete('no-session') 
-      url.searchParams.delete('login-required')
-      window.history.replaceState({}, document.title, url.toString())
-    }
-    
-    // Handle explicit no-session or login-required flags
-    if (noSession === 'true' || loginRequired === 'true') {
-      console.log('📭 Explicit no-session or login-required flag detected')
+    try {
+      const urlParams = new URLSearchParams(window.location.search)
+      const sessionToken = urlParams.get('session')
+      const noSession = urlParams.get('no-session')
+      const loginRequired = urlParams.get('login-required')
       
-      // Clear any cached session data
-      clearSession()
+      console.log('🔍 Session check:')
+      console.log('  - URL:', window.location.href)
+      console.log('  - Token from URL:', sessionToken ? 'Found' : 'Not found')
+      console.log('  - No session flag:', noSession)
+      console.log('  - Login required flag:', loginRequired)
       
-      // Set error to trigger login prompt
-      error.value = 'Login required to use ScanSnap'
-      session.value = null
-      
-      cleanUrl()
-      isLoading.value = false
-      return
-    }
-    
-    if (sessionToken) {
-      console.log('📍 Processing session from URL')
-      const result = await validateSession(sessionToken)
-      
-      if (result) {
-        cleanUrl()
-      } else {
-        error.value = 'Invalid session. Please login again.'
-        clearSession()
+      const cleanUrl = () => {
+        const url = new URL(window.location.href)
+        url.searchParams.delete('session')
+        url.searchParams.delete('no-session') 
+        url.searchParams.delete('login-required')
+        window.history.replaceState({}, document.title, url.toString())
       }
-    } else {
-      // Check localStorage for existing session
-      const stored = localStorage.getItem('scansnap_session')
-      const storedToken = localStorage.getItem('scansnap_session_token')
-      const storedTimestamp = localStorage.getItem('scansnap_session_timestamp')
       
-      if (stored && storedToken && storedTimestamp) {
-        try {
-          const storedSession = JSON.parse(stored) as UserSession
-          const expiresAt = new Date(storedSession.expiresAt)
-          const now = new Date()
-          
-          if (expiresAt > now) {
-            const sessionAge = Date.now() - new Date(storedTimestamp).getTime()
-            const oneHour = 60 * 60 * 1000
-            
-            if (sessionAge < oneHour) {
-              console.log('✅ Using cached session')
-              session.value = storedSession
-            } else {
-              // Try to revalidate
-              console.log('🔄 Revalidating old session')
-              const revalidated = await validateSession(storedToken)
-              if (!revalidated) {
-                error.value = 'Session expired. Please login again.'
-                clearSession()
-              }
-            }
-          } else {
-            console.log('⏰ Stored session expired')
-            error.value = 'Session expired. Please login again.'
-            clearSession()
-          }
-        } catch (e) {
-          console.error('Failed to parse stored session:', e)
-          error.value = 'Invalid session data. Please login again.'
+      if (noSession === 'true' || loginRequired === 'true') {
+        console.log('📭 Explicit no-session or login-required flag detected')
+        clearSession()
+        error.value = 'Login required to use ScanSnap'
+        session.value = null
+        cleanUrl()
+        isLoading.value = false
+        return
+      }
+      
+      if (sessionToken) {
+        console.log('📍 Processing session from URL')
+        const result = await validateSession(sessionToken)
+        
+        if (result) {
+          cleanUrl()
+        } else {
+          error.value = 'Invalid session. Please login again.'
           clearSession()
         }
       } else {
-        console.log('📭 No session - login required')
-        error.value = 'Login required to use ScanSnap'
+        const stored = localStorage.getItem('scansnap_session')
+        const storedToken = localStorage.getItem('scansnap_session_token')
+        const storedTimestamp = localStorage.getItem('scansnap_session_timestamp')
+        
+        if (stored && storedToken && storedTimestamp) {
+          try {
+            const storedSession = JSON.parse(stored) as UserSession
+            const expiresAt = new Date(storedSession.expiresAt)
+            const now = new Date()
+            
+            if (expiresAt > now) {
+              const sessionAge = Date.now() - new Date(storedTimestamp).getTime()
+              const oneHour = 60 * 60 * 1000
+              
+              if (sessionAge < oneHour) {
+                console.log('✅ Using cached session')
+                session.value = storedSession
+              } else {
+                console.log('🔄 Revalidating old session')
+                const revalidated = await validateSession(storedToken)
+                if (!revalidated) {
+                  error.value = 'Session expired. Please login again.'
+                  clearSession()
+                }
+              }
+            } else {
+              console.log('⏰ Stored session expired')
+              error.value = 'Session expired. Please login again.'
+              clearSession()
+            }
+          } catch (e) {
+            console.error('Failed to parse stored session:', e)
+            error.value = 'Invalid session data. Please login again.'
+            clearSession()
+          }
+        } else {
+          console.log('📭 No session - login required')
+          error.value = 'Login required to use ScanSnap'
+        }
       }
+      
+    } catch (err) {
+      console.error('Unexpected error during session check:', err)
+      error.value = 'Session validation failed. Please login again.'
+      clearSession()
+    } finally {
+      isLoading.value = false
+      console.log('✅ Session check complete')
     }
-    
-  } catch (err) {
-    console.error('Unexpected error during session check:', err)
-    error.value = 'Session validation failed. Please login again.'
-    clearSession()
-  } finally {
-    isLoading.value = false
-    console.log('✅ Session check complete')
   }
-}
 
   const clearSession = () => {
     session.value = null
@@ -254,21 +236,18 @@ export function useSession() {
   }
 
   const hasFeature = (feature: string): boolean => {
-    // Basic features always available
     const freeFeatures = ['basic', 'quick', 'export_csv', 'export_xlsx', 'export_pdf']
     
     if (freeFeatures.includes(feature)) {
       return true
     }
     
-    // If no session or in offline mode, deny premium features
     if (!session.value || session.value.email === 'offline@mode.local') {
       return false
     }
     
     const { subscription } = session.value
     
-    // Define feature tiers
     const featureTiers: Record<string, string[]> = {
       basic: [],
       plus: ['verify', 'builder', 'catalog_import'],
@@ -307,7 +286,9 @@ export function useSession() {
     console.log('🔄 Manually refreshing session...')
     await checkSession()
   }
-if (typeof window !== 'undefined') {
+
+  // Setup event listeners for cross-tab logout
+  if (typeof window !== 'undefined') {
     window.addEventListener('storage', (e) => {
       if (e.key === 'scansnap_session' && e.newValue === null) {
         console.log('🚪 Session cleared detected - logging out')
@@ -322,55 +303,26 @@ if (typeof window !== 'undefined') {
       error.value = 'Login required to use ScanSnap'
     })
   }
-  // Initialize session check on mount
- // /src/composables/useSession.ts
-// Update your onMounted section to include cache clearing
 
-onMounted(() => {
-  // Check if this is a fresh login (after logout) - do this BEFORE checkSession
-  const urlParams = new URLSearchParams(window.location.search);
-  const clearCache = urlParams.get('clear-cache');
-  
-  // If we have a clear-cache flag, wipe all app data
-  if (clearCache === 'true') {
-    console.log('🧹 Clearing all cached app data...');
+  // Initialize on mount
+  onMounted(() => {
+    // Just check the session - keep all user data intact
+    checkSession()
+  })
+
+  return {
+    // State
+    session,
+    isLoading,
+    error,
     
-    // Clear all app-specific localStorage
-    const keysToRemove = Object.keys(localStorage).filter(key => 
-      key.startsWith('ui.') || 
-      key.startsWith('data.') || 
-      key.startsWith('catalog.') || 
-      key.startsWith('setup.')
-    );
-    keysToRemove.forEach(key => {
-      console.log('Removing:', key);
-      localStorage.removeItem(key);
-    });
-    
-    // Clean up the URL
-    const url = new URL(window.location.href);
-    url.searchParams.delete('clear-cache');
-    window.history.replaceState({}, document.title, url.toString());
-    
-    console.log('✅ Cache cleared - fresh start!');
+    // Methods
+    validateSession,
+    clearSession,
+    hasFeature,
+    checkSession,
+    getSubscriptionLabel,
+    isSubscribed,
+    refreshSession,
   }
-  
-  // Now check the session as normal
-  checkSession();
-});
-
-return {
-  // State
-  session,
-  isLoading,
-  error,
-  
-  // Methods
-  validateSession,
-  clearSession,
-  hasFeature,
-  checkSession,
-  getSubscriptionLabel,
-  isSubscribed,
-  refreshSession,
 }
