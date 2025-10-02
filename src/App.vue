@@ -53,19 +53,7 @@
     >
       Dashboard →
     </a>
- <button 
-  @click="returnToDashboard" 
-  style="
-    padding: 6px 14px;
-    background: transparent;
-    color: var(--brand);
-    border: 1px solid var(--brand);
-    border-radius: 999px;
-    font-size: 0.85rem;
-    font-weight: 600;
-    cursor: pointer;
-  ">
-  </button>
+ 
   </div>
 </div>
     <!-- Loading State -->
