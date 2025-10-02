@@ -64,12 +64,8 @@
     font-size: 0.85rem;
     font-weight: 600;
     cursor: pointer;
-  "
->
-      "
-    >
-      Logout
-    </button>
+  ">
+  </button>
   </div>
 </div>
     <!-- Loading State -->
