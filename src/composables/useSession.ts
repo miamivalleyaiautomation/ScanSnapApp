@@ -323,23 +323,54 @@ if (typeof window !== 'undefined') {
     })
   }
   // Initialize session check on mount
-  onMounted(() => {
-    checkSession()
-  })
+ // /src/composables/useSession.ts
+// Update your onMounted section to include cache clearing
 
-  return {
-    // State
-    session,
-    isLoading,
-    error,
+onMounted(() => {
+  // Check if this is a fresh login (after logout) - do this BEFORE checkSession
+  const urlParams = new URLSearchParams(window.location.search);
+  const clearCache = urlParams.get('clear-cache');
+  
+  // If we have a clear-cache flag, wipe all app data
+  if (clearCache === 'true') {
+    console.log('🧹 Clearing all cached app data...');
     
-    // Methods
-    validateSession,
-    clearSession,
-    hasFeature,
-    checkSession,
-    getSubscriptionLabel,
-    isSubscribed,
-    refreshSession,
+    // Clear all app-specific localStorage
+    const keysToRemove = Object.keys(localStorage).filter(key => 
+      key.startsWith('ui.') || 
+      key.startsWith('data.') || 
+      key.startsWith('catalog.') || 
+      key.startsWith('setup.')
+    );
+    keysToRemove.forEach(key => {
+      console.log('Removing:', key);
+      localStorage.removeItem(key);
+    });
+    
+    // Clean up the URL
+    const url = new URL(window.location.href);
+    url.searchParams.delete('clear-cache');
+    window.history.replaceState({}, document.title, url.toString());
+    
+    console.log('✅ Cache cleared - fresh start!');
   }
+  
+  // Now check the session as normal
+  checkSession();
+});
+
+return {
+  // State
+  session,
+  isLoading,
+  error,
+  
+  // Methods
+  validateSession,
+  clearSession,
+  hasFeature,
+  checkSession,
+  getSubscriptionLabel,
+  isSubscribed,
+  refreshSession,
 }
