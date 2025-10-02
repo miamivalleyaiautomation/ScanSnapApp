@@ -296,6 +296,7 @@
         :formatList="formatList"
         :trims="trims"
         :enabled="enabled"
+        canUse2D="hasFeature('matrix_codes')"  <!-- ✅ ADDED THIS LINE -->
         @update:scannerMode="scannerMode = $event"
         @update:validateCD="validateCD = $event"
         @update:stripCD="stripCD = $event"
