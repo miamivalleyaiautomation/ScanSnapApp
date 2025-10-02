@@ -524,26 +524,53 @@ watch(beep, v => localStorage.setItem(LS.beep, v ? '1' : '0'))
 
 /* Active formats for the camera */
 const activeFormats = computed(() => {
-  const list = formatList.filter(f => enabled[f])
-  return list.length ? list : ['qr_code']
+  // Filter formats based on what's enabled
+  let list = formatList.filter(f => enabled[f])
+  
+  // CRITICAL: Remove 2D formats if user doesn't have Pro or Pro+DPMS
+  if (!hasFeature('matrix_codes')) {
+    // Filter out all 2D/matrix codes for Basic and Plus users
+    list = list.filter(f => !MATRIX_GROUP.includes(f))
+  }
+  
+  // If no formats remain, default to a basic 1D format
+  return list.length ? list : ['code_128']  // Changed from 'qr_code' to 'code_128'
 })
 
 /* Group toggles */
 const linearOn = computed(() => LINEAR_GROUP.every(f => enabled[f]))
-const matrixOn = computed(() => MATRIX_GROUP.every(f => enabled[f]))
-
+const matrixOn = computed(() => {
+  // Check if user has access to matrix codes
+  if (!hasFeature('matrix_codes')) return false
+  return MATRIX_GROUP.every(f => enabled[f])
+})
 function toggleLinear(e: Event) { 
   const on = (e.target as HTMLInputElement).checked
   LINEAR_GROUP.forEach(f => { enabled[f] = on })
 }
 
 function toggleMatrix(e: Event) { 
+  // Check subscription before allowing matrix toggle
+  if (!hasFeature('matrix_codes')) {
+    showToast('🔒 2D codes require Pro subscription or higher', 2000)
+    ;(e.target as HTMLInputElement).checked = false
+    return
+  }
+  
   const on = (e.target as HTMLInputElement).checked
   MATRIX_GROUP.forEach(f => { enabled[f] = on })
 }
 
 function enableAll() { 
-  formatList.forEach(f => { enabled[f] = true })
+  // Enable all 1D formats
+  LINEAR_GROUP.forEach(f => { enabled[f] = true })
+  
+  // Only enable 2D formats if user has Pro or higher
+  if (hasFeature('matrix_codes')) {
+    MATRIX_GROUP.forEach(f => { enabled[f] = true })
+  } else {
+    showToast('🔒 2D codes not enabled - Pro subscription required', 2000)
+  }
 }
 
 function disableAll() { 
@@ -737,12 +764,22 @@ onMounted(() => {
   
   // Check if current mode is accessible, otherwise switch to 'quick'
   setTimeout(() => {
+   if (!hasFeature('matrix_codes')) {
+      MATRIX_GROUP.forEach(f => { 
+        if (enabled[f]) {
+          console.log(`Disabling ${f} - requires Pro subscription`)
+          enabled[f] = false
+        }
+      })
+    }
+    
+    // Check if current mode is accessible
     if ((mode.value === 'verify' && !hasFeature('verify')) || 
         (mode.value === 'builder' && !hasFeature('builder'))) {
       mode.value = 'quick'
       console.log('Switched to Quick List mode due to subscription limitations')
     }
-  }, 1000) // Small delay to allow session to load
+  }, 1500) // Slightly longer delay to ensure session is loaded
 })
 
 onBeforeUnmount(stopGuard)

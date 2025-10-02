@@ -39,14 +39,39 @@
     </div>
 
     <h3>Scanner Formats</h3>
+    <!-- Subscription notice for 2D codes -->
+<div v-if="!canUse2D" class="subscription-notice">
+  <span class="lock-icon">🔒</span>
+  <div>
+    <strong>2D Codes (QR, DataMatrix, etc.) require Pro subscription</strong>
+    <p style="margin: 4px 0 0 0; font-size: 0.85rem; color: var(--text-dim);">
+      Upgrade to Pro to scan QR codes, DataMatrix, and other 2D formats.
+    </p>
+  </div>
+</div>
     <div class="row nowrap" style="margin-bottom:6px">
       <button class="btn ghost" @click="$emit('enable-all')">Enable all</button>
       <button class="btn ghost" @click="$emit('disable-all')">Disable all</button>
     </div>
     <div class="row nowrap" style="margin-bottom:8px">
-      <label class="kbd no-wrap"><input type="checkbox" :checked="linearOn" @change="$emit('toggle-linear', $event)" /> linear_codes</label>
-      <label class="kbd no-wrap"><input type="checkbox" :checked="matrixOn" @change="$emit('toggle-matrix', $event)" /> matrix_codes</label>
-    </div>
+  <!-- Linear codes checkbox - always available -->
+  <label class="kbd no-wrap">
+    <input type="checkbox" :checked="linearOn" @change="$emit('toggle-linear', $event)" /> 
+    1D codes (barcodes)
+  </label>
+  
+  <!-- Matrix codes checkbox - disabled for Basic/Plus -->
+  <label class="kbd no-wrap" :class="{ disabled: !canUse2D }" :title="!canUse2D ? 'Pro subscription required' : ''">
+    <input 
+      type="checkbox" 
+      :checked="matrixOn" 
+      :disabled="!canUse2D"
+      @change="handleMatrixToggle" 
+    /> 
+    2D codes (QR, etc.)
+    <span v-if="!canUse2D" style="font-size: 0.75rem; color: var(--bad);"> 🔒 Pro</span>
+  </label>
+</div>
 
     <div class="row nowrap" style="margin-bottom:8px">
       <button class="btn warn" @click="$emit('clear-all-trims')">Clear all trims</button>
@@ -55,19 +80,51 @@
     <table class="table setup">
       <thead><tr><th>Format</th><th>Trim Prefix</th><th>Trim Suffix</th><th class="center">Enabled</th></tr></thead>
       <tbody>
-        <tr v-for="f in formatList" :key="f">
-          <td class="ellipsis">{{ f }}</td>
-          <td><input class="input input-compact" type="number" min="0" :value="trims[f].prefix" @input="updateTrim(f, 'prefix', $event)" /></td>
-          <td><input class="input input-compact" type="number" min="0" :value="trims[f].suffix" @input="updateTrim(f, 'suffix', $event)" /></td>
-          <td class="center"><input type="checkbox" :checked="enabled[f]" @change="updateEnabled(f, $event)" /></td>
-        </tr>
-      </tbody>
+      <tbody>
+  <tr v-for="f in formatList" :key="f" :class="{ locked: isFormatLocked(f) }">
+    <td class="ellipsis">
+      {{ f }}
+      <span v-if="isFormatLocked(f)" class="lock-badge">🔒 Pro</span>
+    </td>
+    <td>
+      <input 
+        class="input input-compact" 
+        type="number" 
+        min="0" 
+        :value="trims[f].prefix" 
+        :disabled="isFormatLocked(f)"
+        @input="updateTrim(f, 'prefix', $event)" 
+      />
+    </td>
+    <td>
+      <input 
+        class="input input-compact" 
+        type="number" 
+        min="0" 
+        :value="trims[f].suffix" 
+        :disabled="isFormatLocked(f)"
+        @input="updateTrim(f, 'suffix', $event)" 
+      />
+    </td>
+    <td class="center">
+      <input 
+        type="checkbox" 
+        :checked="enabled[f]" 
+        :disabled="isFormatLocked(f)"
+        @change="updateEnabled(f, $event)" 
+        :title="isFormatLocked(f) ? 'Pro subscription required' : ''"
+      />
+    </td>
+  </tr>
+</tbody>
     </table>
   </div>
 </template>
 
 <script setup lang="ts">
 import type { Format, TrimRules } from '../utils/barcode'
+import { computed } from 'vue'
+import { MATRIX_GROUP } from '../utils/barcode'
 
 const props = defineProps<{
   scannerMode: 'camera' | 'external'
@@ -79,7 +136,25 @@ const props = defineProps<{
   formatList: Format[]
   trims: TrimRules
   enabled: Record<Format, boolean>
+  canUse2D?: boolean // ADD THIS LINE - Pass this from parent App.vue
 }>()
+
+const canUse2D = computed(() => props.canUse2D !== false)
+
+function isFormatLocked(format: Format): boolean {
+  // 2D formats are locked for Basic and Plus users
+  return !canUse2D.value && MATRIX_GROUP.includes(format)
+}
+
+function handleMatrixToggle(event: Event) {
+  if (!canUse2D.value) {
+    // Prevent toggle and show message
+    ;(event.target as HTMLInputElement).checked = false
+    emit('show-upgrade-toast')
+    return
+  }
+  emit('toggle-matrix', event)
+}
 
 const emit = defineEmits<{
   'update:scannerMode': [value: 'camera' | 'external']
@@ -93,14 +168,21 @@ const emit = defineEmits<{
   'clear-all-trims': []
   'update-trim': [format: Format, field: 'prefix' | 'suffix', value: number]
   'update-enabled': [format: Format, value: boolean]
+  'show-upgrade-toast': []  // ADD THIS LINE
 }>()
 
 function updateTrim(format: Format, field: 'prefix' | 'suffix', event: Event) {
+  if (isFormatLocked(format)) return  // ADD THIS LINE
   const value = Number((event.target as HTMLInputElement).value) || 0
   emit('update-trim', format, field, value)
 }
 
 function updateEnabled(format: Format, event: Event) {
+  if (isFormatLocked(format)) {
+    // Prevent enabling locked formats
+    ;(event.target as HTMLInputElement).checked = false
+    return
+  }
   const value = (event.target as HTMLInputElement).checked
   emit('update-enabled', format, value)
 }
@@ -270,5 +352,48 @@ function updateEnabled(format: Format, event: Event) {
   .radio-desc {
     display: none; /* Hide description on very small screens */
   }
+}
+/* ADD these to the <style scoped> section: */
+.subscription-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  background: var(--panel2);
+  border: 1px solid var(--brand);
+  border-radius: 10px;
+  margin-bottom: 12px;
+}
+
+.lock-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.kbd.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.kbd.disabled input {
+  cursor: not-allowed;
+}
+
+tr.locked {
+  opacity: 0.6;
+  background: var(--panel2);
+}
+
+tr.locked .lock-badge {
+  margin-left: 8px;
+  font-size: 0.75rem;
+  color: var(--brand);
+  font-weight: 600;
+}
+
+tr.locked input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--panel2);
 }
 </style>
