@@ -284,31 +284,32 @@
         @clear-catalog="clearCatalog"
       />
 
-      <!-- SETUP TAB -->
-      <SetupTab
-        v-else
-        :scannerMode="scannerMode"
-        :validateCD="validateCD"
-        :stripCD="stripCD"
-        :beep="beep"
-        :linearOn="linearOn"
-        :matrixOn="matrixOn"
-        :formatList="formatList"
-        :trims="trims"
-        :enabled="enabled"
-        :canUse2D="hasFeature('matrix_codes')"  <!-- ✅ ADDED THIS LINE -->
-        @update:scannerMode="scannerMode = $event"
-        @update:validateCD="validateCD = $event"
-        @update:stripCD="stripCD = $event"
-        @update:beep="beep = $event"
-        @toggle-linear="toggleLinear"
-        @toggle-matrix="toggleMatrix"
-        @enable-all="enableAll"
-        @disable-all="disableAll"
-        @clear-all-trims="clearAllTrims"
-        @update-trim="(format, field, value) => { trims[format][field] = value }"
-        @update-enabled="(format, value) => { enabled[format] = value }"
-     />
+      <!-- ✅ CORRECT - Self-closing component -->
+<SetupTab
+  v-else
+  :scannerMode="scannerMode"
+  :validateCD="validateCD"
+  :stripCD="stripCD"
+  :beep="beep"
+  :linearOn="linearOn"
+  :matrixOn="matrixOn"
+  :formatList="formatList"
+  :trims="trims"
+  :enabled="enabled"
+  :canUse2D="hasFeature('matrix_codes')"
+  @update:scannerMode="scannerMode = $event"
+  @update:validateCD="validateCD = $event"
+  @update:stripCD="stripCD = $event"
+  @update:beep="beep = $event"
+  @toggle-linear="toggleLinear"
+  @toggle-matrix="toggleMatrix"
+  @enable-all="enableAll"
+  @disable-all="disableAll"
+  @clear-all-trims="clearAllTrims"
+  @update-trim="(format, field, value) => { trims[format][field] = value }"
+  @update-enabled="(format, value) => { enabled[format] = value }"
+  @show-upgrade-toast="showToast('🔒 2D codes require Pro subscription or higher', 2000)"
+/>  <!-- ✅ NOTE THE SLASH HERE -->
     </template>
   </div>
 </template>
