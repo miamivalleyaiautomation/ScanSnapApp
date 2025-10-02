@@ -187,19 +187,12 @@ export function useSession() {
             const now = new Date()
             
             if (expiresAt > now) {
-              const sessionAge = Date.now() - new Date(storedTimestamp).getTime()
-              const oneHour = 60 * 60 * 1000
-              
-              if (sessionAge < oneHour) {
-                console.log('✅ Using cached session')
-                session.value = storedSession
-              } else {
-                console.log('🔄 Revalidating old session')
-                const revalidated = await validateSession(storedToken)
-                if (!revalidated) {
-                  error.value = 'Session expired. Please login again.'
-                  clearSession()
-                }
+              // CHANGED: Always revalidate with server to catch logouts
+              console.log('🔄 Revalidating session with server')
+              const revalidated = await validateSession(storedToken)
+              if (!revalidated) {
+                error.value = 'Session expired. Please login again.'
+                clearSession()
               }
             } else {
               console.log('⏰ Stored session expired')
