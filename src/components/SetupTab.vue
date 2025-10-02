@@ -39,91 +39,100 @@
     </div>
 
     <h3>Scanner Formats</h3>
+    
     <!-- Subscription notice for 2D codes -->
-<div v-if="!canUse2D" class="subscription-notice">
-  <span class="lock-icon">🔒</span>
-  <div>
-    <strong>2D Codes (QR, DataMatrix, etc.) require Pro subscription</strong>
-    <p style="margin: 4px 0 0 0; font-size: 0.85rem; color: var(--text-dim);">
-      Upgrade to Pro to scan QR codes, DataMatrix, and other 2D formats.
-    </p>
-  </div>
-</div>
+    <div v-if="!canUse2D" class="subscription-notice">
+      <span class="lock-icon">🔒</span>
+      <div>
+        <strong>2D Codes (QR, DataMatrix, etc.) require Pro subscription</strong>
+        <p style="margin: 4px 0 0 0; font-size: 0.85rem; color: var(--text-dim);">
+          Upgrade to Pro to scan QR codes, DataMatrix, and other 2D formats.
+        </p>
+      </div>
+    </div>
+
     <div class="row nowrap" style="margin-bottom:6px">
       <button class="btn ghost" @click="$emit('enable-all')">Enable all</button>
       <button class="btn ghost" @click="$emit('disable-all')">Disable all</button>
     </div>
+    
     <div class="row nowrap" style="margin-bottom:8px">
-  <!-- Linear codes checkbox - always available -->
-  <label class="kbd no-wrap">
-    <input type="checkbox" :checked="linearOn" @change="$emit('toggle-linear', $event)" /> 
-    1D codes (barcodes)
-  </label>
-  
-  <!-- Matrix codes checkbox - disabled for Basic/Plus -->
-  <label class="kbd no-wrap" :class="{ disabled: !canUse2D }" :title="!canUse2D ? 'Pro subscription required' : ''">
-    <input 
-      type="checkbox" 
-      :checked="matrixOn" 
-      :disabled="!canUse2D"
-      @change="handleMatrixToggle" 
-    /> 
-    2D codes (QR, etc.)
-    <span v-if="!canUse2D" style="font-size: 0.75rem; color: var(--bad);"> 🔒 Pro</span>
-  </label>
-</div>
+      <!-- Linear codes checkbox - always available -->
+      <label class="kbd no-wrap">
+        <input type="checkbox" :checked="linearOn" @change="$emit('toggle-linear', $event)" /> 
+        1D codes (barcodes)
+      </label>
+      
+      <!-- Matrix codes checkbox - disabled for Basic/Plus -->
+      <label class="kbd no-wrap" :class="{ disabled: !canUse2D }" :title="!canUse2D ? 'Pro subscription required' : ''">
+        <input 
+          type="checkbox" 
+          :checked="matrixOn" 
+          :disabled="!canUse2D"
+          @change="handleMatrixToggle" 
+        /> 
+        2D codes (QR, etc.)
+        <span v-if="!canUse2D" style="font-size: 0.75rem; color: var(--bad);"> 🔒 Pro</span>
+      </label>
+    </div>
 
     <div class="row nowrap" style="margin-bottom:8px">
       <button class="btn warn" @click="$emit('clear-all-trims')">Clear all trims</button>
     </div>
 
     <table class="table setup">
-      <thead><tr><th>Format</th><th>Trim Prefix</th><th>Trim Suffix</th><th class="center">Enabled</th></tr></thead>
+      <thead>
+        <tr>
+          <th>Format</th>
+          <th>Trim Prefix</th>
+          <th>Trim Suffix</th>
+          <th class="center">Enabled</th>
+        </tr>
+      </thead>
       <tbody>
-      <tbody>
-  <tr v-for="f in formatList" :key="f" :class="{ locked: isFormatLocked(f) }">
-    <td class="ellipsis">
-      {{ f }}
-      <span v-if="isFormatLocked(f)" class="lock-badge">🔒 Pro</span>
-    </td>
-    <td>
-      <input 
-        class="input input-compact" 
-        type="number" 
-        min="0" 
-        :value="trims[f].prefix" 
-        :disabled="isFormatLocked(f)"
-        @input="updateTrim(f, 'prefix', $event)" 
-      />
-    </td>
-    <td>
-      <input 
-        class="input input-compact" 
-        type="number" 
-        min="0" 
-        :value="trims[f].suffix" 
-        :disabled="isFormatLocked(f)"
-        @input="updateTrim(f, 'suffix', $event)" 
-      />
-    </td>
-    <td class="center">
-      <input 
-        type="checkbox" 
-        :checked="enabled[f]" 
-        :disabled="isFormatLocked(f)"
-        @change="updateEnabled(f, $event)" 
-        :title="isFormatLocked(f) ? 'Pro subscription required' : ''"
-      />
-    </td>
-  </tr>
-</tbody>
+        <tr v-for="f in formatList" :key="f" :class="{ locked: isFormatLocked(f) }">
+          <td class="ellipsis">
+            {{ f }}
+            <span v-if="isFormatLocked(f)" class="lock-badge">🔒 Pro</span>
+          </td>
+          <td>
+            <input 
+              class="input input-compact" 
+              type="number" 
+              min="0" 
+              :value="trims[f].prefix" 
+              :disabled="isFormatLocked(f)"
+              @input="updateTrim(f, 'prefix', $event)" 
+            />
+          </td>
+          <td>
+            <input 
+              class="input input-compact" 
+              type="number" 
+              min="0" 
+              :value="trims[f].suffix" 
+              :disabled="isFormatLocked(f)"
+              @input="updateTrim(f, 'suffix', $event)" 
+            />
+          </td>
+          <td class="center">
+            <input 
+              type="checkbox" 
+              :checked="enabled[f]" 
+              :disabled="isFormatLocked(f)"
+              @change="updateEnabled(f, $event)" 
+              :title="isFormatLocked(f) ? 'Pro subscription required' : ''"
+            />
+          </td>
+        </tr>
+      </tbody>
     </table>
   </div>
 </template>
 
 <script setup lang="ts">
-import type { Format, TrimRules } from '../utils/barcode'
 import { computed } from 'vue'
+import type { Format, TrimRules } from '../utils/barcode'
 import { MATRIX_GROUP } from '../utils/barcode'
 
 const props = defineProps<{
@@ -136,9 +145,25 @@ const props = defineProps<{
   formatList: Format[]
   trims: TrimRules
   enabled: Record<Format, boolean>
-  canUse2D?: boolean // ADD THIS LINE - Pass this from parent App.vue
+  canUse2D?: boolean // Pass this from parent App.vue
 }>()
 
+const emit = defineEmits<{
+  'update:scannerMode': [value: 'camera' | 'external']
+  'update:validateCD': [value: boolean]
+  'update:stripCD': [value: boolean]
+  'update:beep': [value: boolean]
+  'toggle-linear': [event: Event]
+  'toggle-matrix': [event: Event]
+  'enable-all': []
+  'disable-all': []
+  'clear-all-trims': []
+  'update-trim': [format: Format, field: 'prefix' | 'suffix', value: number]
+  'update-enabled': [format: Format, value: boolean]
+  'show-upgrade-toast': []
+}>()
+
+// Default to true if not passed (for backward compatibility)
 const canUse2D = computed(() => props.canUse2D !== false)
 
 function isFormatLocked(format: Format): boolean {
@@ -156,23 +181,8 @@ function handleMatrixToggle(event: Event) {
   emit('toggle-matrix', event)
 }
 
-const emit = defineEmits<{
-  'update:scannerMode': [value: 'camera' | 'external']
-  'update:validateCD': [value: boolean]
-  'update:stripCD': [value: boolean]
-  'update:beep': [value: boolean]
-  'toggle-linear': [event: Event]
-  'toggle-matrix': [event: Event]
-  'enable-all': []
-  'disable-all': []
-  'clear-all-trims': []
-  'update-trim': [format: Format, field: 'prefix' | 'suffix', value: number]
-  'update-enabled': [format: Format, value: boolean]
-  'show-upgrade-toast': []  // ADD THIS LINE
-}>()
-
 function updateTrim(format: Format, field: 'prefix' | 'suffix', event: Event) {
-  if (isFormatLocked(format)) return  // ADD THIS LINE
+  if (isFormatLocked(format)) return
   const value = Number((event.target as HTMLInputElement).value) || 0
   emit('update-trim', format, field, value)
 }
@@ -353,7 +363,8 @@ function updateEnabled(format: Format, event: Event) {
     display: none; /* Hide description on very small screens */
   }
 }
-/* ADD these to the <style scoped> section: */
+
+/* Additional styles for subscription restrictions */
 .subscription-notice {
   display: flex;
   align-items: flex-start;
